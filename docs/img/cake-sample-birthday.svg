@@ -1,0 +1,30 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1024" height="1024" fill="#FFF7F2"/>
+  <ellipse cx="512" cy="830" rx="250" ry="46" fill="#E5D4CB"/>
+  <ellipse cx="512" cy="775" rx="235" ry="58" fill="#FFE3E8"/>
+  <rect x="290" y="470" width="444" height="300" rx="44" fill="#FFD6E0"/>
+  <rect x="310" y="500" width="404" height="235" rx="34" fill="#FFF0F4"/>
+  <ellipse cx="512" cy="465" rx="240" ry="82" fill="#FFF6FB"/>
+  <ellipse cx="512" cy="455" rx="225" ry="70" fill="#FFEAF1"/>
+  <g fill="#F472B6">
+    <circle cx="392" cy="430" r="24"/>
+    <circle cx="452" cy="400" r="24"/>
+    <circle cx="512" cy="388" r="24"/>
+    <circle cx="572" cy="400" r="24"/>
+    <circle cx="632" cy="430" r="24"/>
+  </g>
+  <g fill="#FDBA74">
+    <rect x="498" y="270" width="28" height="88" rx="10"/>
+    <path d="M512 228C542 262 540 300 512 320C484 300 482 262 512 228Z"/>
+  </g>
+  <g fill="#FB7185">
+    <circle cx="410" cy="520" r="28"/>
+    <circle cx="615" cy="540" r="28"/>
+    <circle cx="500" cy="605" r="30"/>
+  </g>
+  <g fill="#F9A8D4">
+    <path d="M380 655C410 620 450 620 478 655C450 685 410 690 380 655Z"/>
+    <path d="M548 645C580 610 622 610 650 645C620 677 580 680 548 645Z"/>
+  </g>
+  <text x="346" y="730" font-size="52" font-family="Arial" font-weight="700" fill="#BE185D">Happy Birthday</text>
+</svg>

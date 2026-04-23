@@ -1,0 +1,38 @@
+<svg width="1600" height="900" viewBox="0 0 1600 900" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1600" height="900" fill="#FFFDF7"/>
+  <text x="80" y="90" font-size="40" font-family="Arial" font-weight="700" fill="#1F2937">Free Cake 业务闭环流程图</text>
+  <text x="80" y="130" font-size="20" font-family="Arial" fill="#6B7280">从 AI 生成到到店核销的完整链路</text>
+
+  <g font-family="Arial" font-size="24" fill="#111827">
+    <rect x="70" y="300" width="180" height="120" rx="24" fill="#FDE68A"/><text x="112" y="370">进入活动</text>
+    <rect x="290" y="300" width="180" height="120" rx="24" fill="#FBCFE8"/><text x="332" y="370">AI 出图</text>
+    <rect x="510" y="300" width="180" height="120" rx="24" fill="#C7D2FE"/><text x="552" y="370">发布参赛</text>
+    <rect x="730" y="300" width="180" height="120" rx="24" fill="#A7F3D0"/><text x="772" y="370">分享拉票</text>
+    <rect x="950" y="300" width="180" height="120" rx="24" fill="#BFDBFE"/><text x="992" y="370">Top100</text>
+    <rect x="1170" y="300" width="180" height="120" rx="24" fill="#FCD34D"/><text x="1212" y="370">生产排产</text>
+    <rect x="1390" y="300" width="140" height="120" rx="24" fill="#FDBA74"/><text x="1422" y="370">核销</text>
+  </g>
+
+  <g stroke="#9CA3AF" stroke-width="8" stroke-linecap="round">
+    <path d="M250 360H290"/>
+    <path d="M470 360H510"/>
+    <path d="M690 360H730"/>
+    <path d="M910 360H950"/>
+    <path d="M1130 360H1170"/>
+    <path d="M1350 360H1390"/>
+  </g>
+
+  <g font-family="Arial" font-size="22" fill="#374151">
+    <text x="78" y="480">定位校验 / 赛区确认</text>
+    <text x="287" y="480">生成 5 张候选图</text>
+    <text x="515" y="480">选择模板并提交作品</text>
+    <text x="730" y="480">投票 + 风控识别</text>
+    <text x="942" y="480">开奖结算 + 获奖名单</text>
+    <text x="1160" y="480">生成任务 / 绑定门店</text>
+    <text x="1382" y="480">扫码领蛋糕</text>
+  </g>
+
+  <rect x="240" y="610" width="1120" height="150" rx="28" fill="#EEF2FF"/>
+  <text x="300" y="675" font-size="30" font-family="Arial" font-weight="700" fill="#3730A3">云端统一能力</text>
+  <text x="300" y="725" font-size="24" font-family="Arial" fill="#1F2937">活动规则 · 风控判定 · 排行计算 · 订单生成 · 排产调度 · 核销审计 · 经营报表</text>
+</svg>

@@ -1,0 +1,31 @@
+<svg width="1600" height="900" viewBox="0 0 1600 900" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1600" height="900" fill="#FFF7ED"/>
+  <text x="80" y="90" font-size="40" font-family="Arial" font-weight="700" fill="#1F2937">C 端小程序首页线框图</text>
+  <text x="80" y="130" font-size="20" font-family="Arial" fill="#6B7280">首页 / 生成 / 排行榜 / 我的</text>
+
+  <rect x="520" y="120" width="560" height="660" rx="40" fill="#111827"/>
+  <rect x="545" y="150" width="510" height="605" rx="28" fill="#FFF8F2"/>
+  <rect x="585" y="180" width="430" height="120" rx="24" fill="#FDE68A"/>
+  <text x="630" y="235" font-size="30" font-family="Arial" font-weight="700" fill="#92400E">Free Cake 村镇活动</text>
+  <text x="630" y="275" font-size="20" font-family="Arial" fill="#92400E">当前赛区：白马镇 · 距开奖 2 天</text>
+
+  <rect x="585" y="325" width="430" height="64" rx="18" fill="#FFFFFF" stroke="#F59E0B" stroke-width="2"/>
+  <text x="620" y="366" font-size="24" font-family="Arial" fill="#1F2937">定位已通过 · 10km 内可参与</text>
+
+  <rect x="585" y="420" width="430" height="90" rx="22" fill="#FB7185"/>
+  <text x="695" y="476" font-size="30" font-family="Arial" font-weight="700" fill="#FFFFFF">立即生成我的蛋糕</text>
+
+  <text x="585" y="560" font-size="24" font-family="Arial" font-weight="700" fill="#374151">热门作品</text>
+  <rect x="585" y="585" width="130" height="110" rx="20" fill="#FBCFE8"/>
+  <rect x="735" y="585" width="130" height="110" rx="20" fill="#C7D2FE"/>
+  <rect x="885" y="585" width="130" height="110" rx="20" fill="#A7F3D0"/>
+  <text x="610" y="715" font-size="18" font-family="Arial" fill="#6B7280">作品A</text>
+  <text x="760" y="715" font-size="18" font-family="Arial" fill="#6B7280">作品B</text>
+  <text x="910" y="715" font-size="18" font-family="Arial" fill="#6B7280">作品C</text>
+
+  <rect x="585" y="720" width="430" height="1" fill="#E5E7EB"/>
+  <text x="660" y="745" font-size="18" font-family="Arial" fill="#9CA3AF">首页</text>
+  <text x="770" y="745" font-size="18" font-family="Arial" fill="#9CA3AF">生成</text>
+  <text x="875" y="745" font-size="18" font-family="Arial" fill="#9CA3AF">排行</text>
+  <text x="970" y="745" font-size="18" font-family="Arial" fill="#9CA3AF">我的</text>
+</svg>

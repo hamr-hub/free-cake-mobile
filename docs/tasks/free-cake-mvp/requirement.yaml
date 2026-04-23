@@ -1,0 +1,231 @@
+gate:
+  verdict: "PASS"
+  mode: "standard"
+  p0_missing: []
+  p1_missing:
+    - dimension: "tracking_spec"
+      description: "埋点口径未完整定义（仅提及事件名，缺参数规格和上报时机）"
+    - dimension: "i18n"
+      description: "未定义多语言策略（村镇场景可能涉及方言/少数民族语言）"
+    - dimension: "performance_budget"
+      description: "未定义 C 端性能预算（小程序/H5 首屏加载、投票峰值容量）"
+    - dimension: "gray_release"
+      description: "未定义灰度发布策略（多赛区逐步开放应有灰度计划）"
+  open_questions: []
+  risks:
+    - description: "AI 生成图可能不可直接生产，需映射到可生产模板"
+      severity: "medium"
+    - description: "村镇网络环境可能不稳定，核销端需支持离线短时缓存"
+      severity: "medium"
+    - description: "食品安全合规要求，需建立 SOP 和检查清单"
+      severity: "high"
+  figma_links: []
+  figma_status: "not_found"
+  ui_spec_source: "text_only"
+  ambiguity_score:
+    business_goal_clarity: 9
+    interaction_completeness: 8
+    ac_testability: 7
+    data_contract_certainty: 8
+    overall: 8
+
+implementation_context:
+  code_complete: false
+  test_complete: false
+  note: "全新项目，从零搭建"
+  missing_items: []
+
+intent_tree:
+  root: "Free Cake 村镇 AI 蛋糕项目 MVP"
+  children:
+    - id: "I01"
+      intent: "C 端用户参赛与 AI 蛋糕设计"
+      priority: "P0"
+      children:
+        - id: "I01.1"
+          intent: "用户登录与赛区校验"
+        - id: "I01.2"
+          intent: "AI 生成 5 款蛋糕效果图"
+        - id: "I01.3"
+          intent: "选择设计并发布参赛作品"
+    - id: "I02"
+      intent: "投票与排行"
+      priority: "P0"
+      children:
+        - id: "I02.1"
+          intent: "投票（含风控校验）"
+        - id: "I02.2"
+          intent: "排行榜实时展示"
+    - id: "I03"
+      intent: "开奖与生产履约"
+      priority: "P0"
+      children:
+        - id: "I03.1"
+          intent: "Top100 自动结算"
+        - id: "I03.2"
+          intent: "生成奖励订单"
+        - id: "I03.3"
+          intent: "排产与生产指令下发"
+    - id: "I04"
+      intent: "核销自提"
+      priority: "P0"
+      children:
+        - id: "I04.1"
+          intent: "核销码生成与有效期控制"
+        - id: "I04.2"
+          intent: "门店扫码核销"
+    - id: "I05"
+      intent: "B 端运营中台"
+      priority: "P0"
+      children:
+        - id: "I05.1"
+          intent: "活动管理（创建/配置/模板复用）"
+        - id: "I05.2"
+          intent: "赛区管理"
+        - id: "I05.3"
+          intent: "风控审核台"
+        - id: "I05.4"
+          intent: "排产中心"
+        - id: "I05.5"
+          intent: "核销管理"
+        - id: "I05.6"
+          intent: "库存中心"
+        - id: "I05.7"
+          intent: "门店管理"
+        - id: "I05.8"
+          intent: "经营报表 Dashboard"
+
+implicit_requirements:
+  - scenario: "network_failure"
+    description: "村镇网络不稳定，门店核销端需支持离线短时缓存"
+    priority: "P1"
+  - scenario: "data_migration"
+    description: "MVP 到多镇复制阶段的数据迁移策略"
+    priority: "P2"
+  - scenario: "concurrency"
+    description: "投票峰值秒级响应，排行榜缓存刷新 3-10 秒"
+    priority: "P1"
+  - scenario: "security"
+    description: "核销码防撞库与时效控制，RBAC 管理后台权限"
+    priority: "P0"
+  - scenario: "audit"
+    description: "扣票、改票、手动加名额、重置核销码等操作必须审计日志"
+    priority: "P0"
+
+business_goal:
+  target_user: "村镇 10km 内居民（C 端） + 总部运营团队（B 端） + 村镇门店执行人员"
+  problem: "乡镇蛋糕市场缺乏标准化运营和数字化管理，获客效率低"
+  success_metrics:
+    - metric: "单赛区有效参与人数"
+      target: "≥500"
+      observable: true
+    - metric: "投票作弊拦截率"
+      target: "≥90%"
+      observable: true
+    - metric: "Top100 自动结算准确率"
+      target: "100%"
+      observable: true
+    - metric: "核销成功率"
+      target: "≥85%"
+      observable: true
+    - metric: "免费用户转付费率"
+      target: "≥5%"
+      observable: true
+
+scope:
+  in_scope:
+    - "H5/小程序 C 端参赛、AI 出图、投票、排行"
+    - "B 端运营中台（活动/赛区/风控/排产/核销/库存/门店/报表）"
+    - "Top100 自动结算与订单生成"
+    - "门店核销与生产指令下发"
+    - "基础风控（防刷票、防跨区）"
+  out_of_scope_mvp:
+    - "ROS2 设备自动生产（首期人工确认开关）"
+    - "人员考勤与薪资核算"
+    - "多赛区管理（首期单赛区验证）"
+    - "自动排产（首期人工排产）"
+    - "私域转化工具（Phase 2）"
+
+key_interactions:
+  main_path:
+    - step: 1
+      action: "用户进入 H5/小程序"
+      entry: "首页 Banner"
+    - step: 2
+      action: "选择村镇赛区，完成定位校验"
+      entry: "赛区确认页"
+    - step: 3
+      action: "AI 生成 5 款蛋糕效果图"
+      entry: "AI 生成页"
+    - step: 4
+      action: "选择设计并发布参赛"
+      entry: "发布确认页"
+    - step: 5
+      action: "分享拉票"
+      entry: "作品详情页"
+    - step: 6
+      action: "活动结束自动开奖"
+      entry: "开奖通知"
+    - step: 7
+      action: "到店扫码核销领取"
+      entry: "领奖核销页"
+
+acceptance_criteria:
+  - id: "AC-01"
+    given: "用户已完成手机号验证且定位在 10km 服务范围内"
+    when: "用户提交蛋糕设计需求并选择参赛"
+    then: "系统在 30 秒内生成 5 张蛋糕效果图，用户可选择 1 张发布参赛"
+  - id: "AC-02"
+    given: "活动处于投票开放阶段"
+    when: "用户对参赛作品投票"
+    then: "系统记录投票，每日限投 3 票，命中风控策略的票先冻结后复核"
+  - id: "AC-03"
+    given: "活动投票截止且有至少 100 个参赛作品"
+    when: "系统自动结算"
+    then: "按有效票排序生成 Top100 获奖名单，同步生成奖励订单与核销码"
+  - id: "AC-04"
+    given: "获奖用户持有有效核销码且在领取时效内"
+    when: "用户到门店扫码核销"
+    then: "系统校验手机号+核销码，确认领取成功，核销码失效不可重复使用"
+  - id: "AC-05"
+    given: "B 端运营人员登录管理后台"
+    when: "创建新活动并配置活动规则"
+    then: "活动进入 draft 状态，可配置赛区、时间、奖品规则、投票规则，支持模板复用"
+  - id: "AC-06"
+    given: "风控系统检测到异常投票行为"
+    when: "B 端运营人员在风控审核台查看异常事件"
+    then: "系统展示风险分布、设备/IP 聚类视图，支持一键冻结/解冻和批量扣减异常票"
+
+data_interfaces:
+  - endpoint: "POST /api/auth/login"
+    description: "用户登录"
+  - endpoint: "POST /api/activities/{id}/entries/generate"
+    description: "AI 生成蛋糕图"
+  - endpoint: "POST /api/activities/{id}/entries"
+    description: "提交参赛作品"
+  - endpoint: "POST /api/entries/{id}/vote"
+    description: "投票"
+  - endpoint: "GET /api/activities/{id}/rank"
+    description: "排行榜"
+  - endpoint: "POST /api/activities/{id}/settle"
+    description: "开奖结算"
+  - endpoint: "POST /api/orders/{id}/schedule"
+    description: "排产调度"
+  - endpoint: "POST /api/redeem/verify"
+    description: "核销校验"
+  - endpoint: "GET /api/stores/{id}/inventory"
+    description: "门店库存"
+  - endpoint: "POST /api/device/tasks/report"
+    description: "设备任务状态回传"
+
+tech_stack:
+  frontend:
+    framework: "refine + react + vite"
+    ui_library: "Ant Design"
+    target: "B 端运营后台"
+  backend:
+    language: "Rust"
+    framework: "Axum"
+    database: "MySQL + Redis"
+    object_storage: "OSS/COS"
+    architecture: "模块化单体"

@@ -1,0 +1,57 @@
+<svg width="1600" height="900" viewBox="0 0 1600 900" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1600" height="900" fill="#F8FAFC"/>
+  <text x="70" y="80" font-size="40" font-family="Arial" font-weight="700" fill="#0F172A">B 端运营 Dashboard 草图</text>
+  <text x="70" y="120" font-size="20" font-family="Arial" fill="#64748B">多赛区活动、风控、排产、核销总览</text>
+
+  <rect x="40" y="150" width="250" height="690" rx="24" fill="#0F172A"/>
+  <g font-family="Arial" font-size="24" fill="#E2E8F0">
+    <text x="95" y="230">总览</text>
+    <text x="95" y="290">赛区管理</text>
+    <text x="95" y="350">活动管理</text>
+    <text x="95" y="410">风控台</text>
+    <text x="95" y="470">开奖订单</text>
+    <text x="95" y="530">排产中心</text>
+    <text x="95" y="590">库存中心</text>
+    <text x="95" y="650">门店管理</text>
+  </g>
+
+  <g>
+    <rect x="330" y="160" width="1220" height="110" rx="24" fill="#FFFFFF" stroke="#E2E8F0" stroke-width="2"/>
+    <rect x="360" y="190" width="160" height="50" rx="16" fill="#E0F2FE"/>
+    <text x="390" y="223" font-size="22" font-family="Arial" fill="#0369A1">活动中赛区 12</text>
+    <rect x="550" y="190" width="160" height="50" rx="16" fill="#DCFCE7"/>
+    <text x="580" y="223" font-size="22" font-family="Arial" fill="#166534">今日参赛 842</text>
+    <rect x="740" y="190" width="160" height="50" rx="16" fill="#FEF3C7"/>
+    <text x="770" y="223" font-size="22" font-family="Arial" fill="#92400E">风险票 6.2%</text>
+    <rect x="930" y="190" width="160" height="50" rx="16" fill="#FEE2E2"/>
+    <text x="960" y="223" font-size="22" font-family="Arial" fill="#B91C1C">待排产 118</text>
+    <rect x="1120" y="190" width="160" height="50" rx="16" fill="#EDE9FE"/>
+    <text x="1150" y="223" font-size="22" font-family="Arial" fill="#6D28D9">核销率 87%</text>
+  </g>
+
+  <rect x="330" y="300" width="740" height="240" rx="24" fill="#FFFFFF" stroke="#E2E8F0" stroke-width="2"/>
+  <text x="370" y="350" font-size="28" font-family="Arial" font-weight="700" fill="#1E293B">参与 / 投票趋势</text>
+  <path d="M390 500C470 470 520 390 610 410C700 430 760 340 850 360C930 378 980 330 1030 350" stroke="#2563EB" stroke-width="6" stroke-linecap="round"/>
+  <path d="M390 520C470 540 520 500 610 510C700 520 760 470 850 485C930 500 980 450 1030 460" stroke="#F97316" stroke-width="6" stroke-linecap="round"/>
+
+  <rect x="1090" y="300" width="460" height="240" rx="24" fill="#FFFFFF" stroke="#E2E8F0" stroke-width="2"/>
+  <text x="1130" y="350" font-size="28" font-family="Arial" font-weight="700" fill="#1E293B">风险事件</text>
+  <text x="1130" y="405" font-size="22" font-family="Arial" fill="#B91C1C">• 异常票激增：白马镇 3 起</text>
+  <text x="1130" y="455" font-size="22" font-family="Arial" fill="#B91C1C">• 设备批量投票：17 台</text>
+  <text x="1130" y="505" font-size="22" font-family="Arial" fill="#B91C1C">• 跨区投票：42 条</text>
+
+  <rect x="330" y="570" width="600" height="240" rx="24" fill="#FFFFFF" stroke="#E2E8F0" stroke-width="2"/>
+  <text x="370" y="620" font-size="28" font-family="Arial" font-weight="700" fill="#1E293B">门店产能</text>
+  <rect x="390" y="665" width="440" height="24" rx="12" fill="#E5E7EB"/>
+  <rect x="390" y="665" width="300" height="24" rx="12" fill="#22C55E"/>
+  <text x="850" y="684" font-size="20" font-family="Arial" fill="#374151">68%</text>
+  <rect x="390" y="720" width="440" height="24" rx="12" fill="#E5E7EB"/>
+  <rect x="390" y="720" width="360" height="24" rx="12" fill="#F59E0B"/>
+  <text x="850" y="739" font-size="20" font-family="Arial" fill="#374151">82%</text>
+
+  <rect x="960" y="570" width="590" height="240" rx="24" fill="#FFFFFF" stroke="#E2E8F0" stroke-width="2"/>
+  <text x="1000" y="620" font-size="28" font-family="Arial" font-weight="700" fill="#1E293B">待处理事项</text>
+  <text x="1000" y="675" font-size="22" font-family="Arial" fill="#334155">• 3 个活动待开奖</text>
+  <text x="1000" y="720" font-size="22" font-family="Arial" fill="#334155">• 18 个订单待人工复核</text>
+  <text x="1000" y="765" font-size="22" font-family="Arial" fill="#334155">• 5 家门店低库存预警</text>
+</svg>

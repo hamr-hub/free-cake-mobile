@@ -1,0 +1,396 @@
+plan:
+  meta:
+    source_tech_doc: "docs/tasks/free-cake-mvp/tech-solution.yaml"
+    scope: "P0"
+    test_coverage_target: 80
+    min_tests_per_feature: 3
+    platform: "web"
+
+  tasks:
+    # === Phase 1: 后端基础设施 ===
+
+    - id: "T0-infra"
+      priority: "P0"
+      type: "infra"
+      title: "初始化 Rust 后端项目骨架"
+      files:
+        - "server/Cargo.toml"
+        - "server/src/main.rs"
+        - "server/src/config.rs"
+        - "server/src/errors.rs"
+        - "server/src/middleware/auth.rs"
+        - "server/src/middleware/error_handler.rs"
+      depends_on: []
+      definition_of_done:
+        - "Axum 服务可启动并监听端口"
+        - "JWT 中间件和统一错误处理配置完成"
+        - "cargo check 通过"
+
+    - id: "T0-db"
+      priority: "P0"
+      type: "infra"
+      title: "初始化数据库层与迁移"
+      files:
+        - "server/src/db/mod.rs"
+        - "server/src/db/models.rs"
+        - "server/src/db/migrations/"
+      depends_on: ["T0-infra"]
+      definition_of_done:
+        - "MySQL 连接池配置完成"
+        - "所有核心表（region/store/activity/user/contest_entry/vote_record/winner_record/reward_order/production_task/redeem_code/redeem_record/inventory_item/inventory_txn/staff/attendance_record/audit_log）迁移脚本执行成功"
+        - "关键索引创建完成"
+
+    # === Phase 2: 认证 ===
+
+    - id: "T1-auth-test"
+      priority: "P0"
+      type: "test"
+      title: "认证模块单元测试"
+      test_type: "pure"
+      file: "server/tests/auth_test.rs"
+      given: "用户提交手机号和验证码"
+      when: "调用登录接口"
+      then:
+        - "验证码正确时返回 JWT token"
+        - "验证码错误时返回 401"
+        - "频繁请求时返回 429"
+      depends_on: ["T0-infra"]
+
+    - id: "P0-auth"
+      priority: "P0"
+      type: "code"
+      title: "实现认证接口"
+      files:
+        - "server/src/handlers/auth.rs"
+      depends_on: ["T1-auth-test"]
+      definition_of_done:
+        - "POST /api/auth/login 实现完成"
+        - "JWT token 生成与验证"
+        - "验证码限流"
+        - "对应测试通过"
+
+    # === Phase 3: 活动管理 ===
+
+    - id: "T2-activity-test"
+      priority: "P0"
+      type: "test"
+      title: "活动管理模块测试"
+      test_type: "pure"
+      file: "server/tests/activity_test.rs"
+      given: "运营人员创建/编辑/发布活动"
+      when: "调用活动 CRUD 接口"
+      then:
+        - "活动创建成功，状态为 draft"
+        - "活动状态机流转正确（draft→registration_open→voting_open→voting_closed→settled→redeeming→finished）"
+        - "无权限时返回 403"
+      depends_on: ["T0-db"]
+
+    - id: "P0-activity"
+      priority: "P0"
+      type: "code"
+      title: "实现活动管理接口"
+      files:
+        - "server/src/handlers/activity.rs"
+      depends_on: ["T2-activity-test"]
+      definition_of_done:
+        - "活动 CRUD + 状态机实现"
+        - "活动模板复用支持"
+        - "RBAC 权限校验"
+        - "对应测试通过"
+
+    # === Phase 4: AI 出图与参赛 ===
+
+    - id: "T3-ai-test"
+      priority: "P0"
+      type: "test"
+      title: "AI 生成与参赛模块测试"
+      test_type: "pure"
+      file: "server/tests/entry_test.rs"
+      given: "用户在服务范围内提交蛋糕设计需求"
+      when: "调用 AI 生成接口和参赛提交接口"
+      then:
+        - "AI 生成返回 5 张图和对应模板 ID"
+        - "用户可选择 1 张提交参赛"
+        - "重复参赛返回 400"
+        - "不在服务范围返回 403"
+      depends_on: ["T0-db", "P0-auth"]
+
+    - id: "P0-ai-entry"
+      priority: "P0"
+      type: "code"
+      title: "实现 AI 生成与参赛接口"
+      files:
+        - "server/src/handlers/entry.rs"
+        - "server/src/services/ai_generator.rs"
+      depends_on: ["T3-ai-test"]
+      definition_of_done:
+        - "POST /api/activities/{id}/entries/generate 实现完成"
+        - "POST /api/activities/{id}/entries 实现完成"
+        - "AI prompt 模板管理"
+        - "内容安全审核流程"
+        - "赛区归属校验"
+        - "对应测试通过"
+
+    # === Phase 5: 投票与风控 ===
+
+    - id: "T4-vote-test"
+      priority: "P0"
+      type: "test"
+      title: "投票与风控模块测试"
+      test_type: "pure"
+      file: "server/tests/vote_test.rs"
+      given: "活动处于投票阶段，用户投票"
+      when: "调用投票接口"
+      then:
+        - "正常投票成功，返回投票状态和剩余票数"
+        - "超过每日限制返回 429"
+        - "风控拦截时返回冻结状态"
+        - "排行榜接口返回有效票排序"
+      depends_on: ["T0-db", "P0-activity"]
+
+    - id: "P0-vote-risk"
+      priority: "P0"
+      type: "code"
+      title: "实现投票与风控接口"
+      files:
+        - "server/src/handlers/vote.rs"
+        - "server/src/services/risk_control.rs"
+        - "server/src/services/rank_cache.rs"
+      depends_on: ["T4-vote-test"]
+      definition_of_done:
+        - "POST /api/entries/{id}/vote 实现完成"
+        - "GET /api/activities/{id}/rank 实现完成"
+        - "每日投票限流"
+        - "多维度风控校验（手机号/OpenID/设备指纹/IP/定位）"
+        - "Redis 排行榜缓存（3-10s 刷新）"
+        - "对应测试通过"
+
+    # === Phase 6: 结算 ===
+
+    - id: "T5-settle-test"
+      priority: "P0"
+      type: "test"
+      title: "开奖结算模块测试"
+      test_type: "pure"
+      file: "server/tests/settlement_test.rs"
+      given: "活动投票截止"
+      when: "调用结算接口"
+      then:
+        - "按有效票排序生成 Top100 获奖名单"
+        - "同步生成奖励订单和核销码"
+        - "重复结算返回 409"
+        - "未到结算时间返回 400"
+      depends_on: ["P0-vote-risk"]
+
+    - id: "P0-settle"
+      priority: "P0"
+      type: "code"
+      title: "实现开奖结算接口"
+      files:
+        - "server/src/handlers/settlement.rs"
+      depends_on: ["T5-settle-test"]
+      definition_of_done:
+        - "POST /api/activities/{id}/settle 实现完成"
+        - "Top100 自动结算逻辑"
+        - "获奖名单生成"
+        - "奖励订单与核销码创建"
+        - "Feature flag 控制（enable_auto_settle）"
+        - "对应测试通过"
+
+    # === Phase 7: 订单与排产 ===
+
+    - id: "T6-order-test"
+      priority: "P0"
+      type: "test"
+      title: "订单与排产模块测试"
+      test_type: "pure"
+      file: "server/tests/order_test.rs"
+      given: "获奖订单待排产"
+      when: "调用排产接口"
+      then:
+        - "排产成功返回批次 ID 和任务 ID 列表"
+        - "产能不足返回 409"
+        - "参数错误返回 400"
+      depends_on: ["P0-settle"]
+
+    - id: "P0-order"
+      priority: "P0"
+      type: "code"
+      title: "实现订单与排产接口"
+      files:
+        - "server/src/handlers/order.rs"
+      depends_on: ["T6-order-test"]
+      definition_of_done:
+        - "POST /api/orders/{id}/schedule 实现完成"
+        - "排产逻辑（门店产能校验）"
+        - "生产指令下发"
+        - "对应测试通过"
+
+    # === Phase 8: 核销 ===
+
+    - id: "T7-redeem-test"
+      priority: "P0"
+      type: "test"
+      title: "核销模块测试"
+      test_type: "pure"
+      file: "server/tests/redeem_test.rs"
+      given: "获奖用户持有核销码到门店核销"
+      when: "调用核销接口"
+      then:
+        - "有效核销码校验成功，确认领取"
+        - "重复核销返回幂等结果"
+        - "过期核销码返回 410"
+        - "无效核销码返回 400"
+      depends_on: ["P0-settle"]
+
+    - id: "P0-redeem"
+      priority: "P0"
+      type: "code"
+      title: "实现核销接口"
+      files:
+        - "server/src/handlers/redeem.rs"
+      depends_on: ["T7-redeem-test"]
+      definition_of_done:
+        - "POST /api/redeem/verify 实现完成"
+        - "核销码校验+幂等控制（Redis 分布式锁）"
+        - "有效期控制"
+        - "核销结果回传"
+        - "对应测试通过"
+
+    # === Phase 9: 库存与门店 ===
+
+    - id: "T8-inventory-test"
+      priority: "P1"
+      type: "test"
+      title: "库存与门店模块测试"
+      test_type: "pure"
+      file: "server/tests/inventory_test.rs"
+      given: "门店库存台账存在"
+      when: "调用库存查询和预警接口"
+      then:
+        - "返回库存台账和预警列表"
+        - "排产自动预扣库存"
+      depends_on: ["T0-db"]
+
+    - id: "P1-inventory-store"
+      priority: "P1"
+      type: "code"
+      title: "实现库存与门店接口"
+      files:
+        - "server/src/handlers/inventory.rs"
+        - "server/src/handlers/store.rs"
+      depends_on: ["T8-inventory-test"]
+      definition_of_done:
+        - "GET /api/stores/{id}/inventory 实现完成"
+        - "库存预警逻辑"
+        - "门店信息管理"
+        - "对应测试通过"
+
+    # === Phase 10: 审计日志与通知 ===
+
+    - id: "P1-audit-notification"
+      priority: "P1"
+      type: "code"
+      title: "实现审计日志与通知服务"
+      files:
+        - "server/src/services/audit_log.rs"
+        - "server/src/services/notification.rs"
+      depends_on: ["T0-infra"]
+      definition_of_done:
+        - "审计日志自动记录扣票/改票/手动加名额等操作"
+        - "开奖通知推送"
+        - "库存预警推送"
+
+    # === Phase 11: Dashboard ===
+
+    - id: "P1-dashboard-api"
+      priority: "P1"
+      type: "code"
+      title: "实现 Dashboard 统计接口"
+      files:
+        - "server/src/handlers/dashboard.rs"
+      depends_on: ["T0-db", "P0-vote-risk", "P0-settle"]
+      definition_of_done:
+        - "GET /api/dashboard/stats 实现完成"
+        - "核心统计卡片数据聚合"
+
+    # === Phase 12: 前端基础设施 ===
+
+    - id: "T9-client-infra-test"
+      priority: "P0"
+      type: "test"
+      title: "前端项目初始化与基础组件测试"
+      test_type: "component"
+      file: "client/src/__tests__/setup.test.ts"
+      given: "refine 项目已初始化"
+      when: "启动开发服务器"
+      then:
+        - "页面可正常渲染"
+        - "认证提供者正确配置"
+        - "数据提供者正确配置"
+      depends_on: []
+
+    - id: "P0-client-infra"
+      priority: "P0"
+      type: "code"
+      title: "初始化前端 refine 项目"
+      files:
+        - "client/package.json"
+        - "client/vite.config.ts"
+        - "client/src/App.tsx"
+        - "client/src/providers/authProvider.ts"
+        - "client/src/providers/dataProvider.ts"
+        - "client/src/layouts/AdminLayout.tsx"
+      depends_on: ["T9-client-infra-test"]
+      definition_of_done:
+        - "refine + react + vite 项目可启动"
+        - "认证和数据提供者对接后端 API"
+        - "Ant Design 布局配置完成"
+
+    # === Phase 13: B 端页面 ===
+
+    - id: "P0-client-pages"
+      priority: "P0"
+      type: "code"
+      title: "实现 B 端核心页面"
+      files:
+        - "client/src/pages/dashboard/index.tsx"
+        - "client/src/pages/activities/list.tsx"
+        - "client/src/pages/activities/create.tsx"
+        - "client/src/pages/activities/show.tsx"
+        - "client/src/pages/regions/list.tsx"
+        - "client/src/pages/entries/list.tsx"
+        - "client/src/pages/votes/risk-control.tsx"
+        - "client/src/pages/settlement/list.tsx"
+        - "client/src/pages/production/list.tsx"
+        - "client/src/pages/redeem/list.tsx"
+      depends_on: ["P0-client-infra", "P0-auth", "P0-activity"]
+      definition_of_done:
+        - "Dashboard 总览页核心卡片和图表展示"
+        - "活动 CRUD 页面完整（创建/列表/详情）"
+        - "投票风控台（异常事件/冻结/扣票）"
+        - "开奖与订单页"
+        - "排产中心页"
+        - "核销管理页"
+
+    - id: "P1-client-secondary-pages"
+      priority: "P1"
+      type: "code"
+      title: "实现 B 端辅助页面与组件"
+      files:
+        - "client/src/pages/inventory/list.tsx"
+        - "client/src/pages/stores/list.tsx"
+        - "client/src/pages/staff/list.tsx"
+        - "client/src/components/CountdownBanner.tsx"
+        - "client/src/components/EntryCard.tsx"
+        - "client/src/components/RiskTag.tsx"
+        - "client/src/components/AuditDrawer.tsx"
+      depends_on: ["P0-client-pages"]
+      definition_of_done:
+        - "库存/门店/人员管理页"
+        - "核心业务组件完成"
+
+  commands:
+    test: "cd server && cargo test && cd client && npx jest"
+    lint: "cd server && cargo clippy && cd client && npx eslint src/ --fix"
+    typecheck: "cd client && npx tsc --noEmit"

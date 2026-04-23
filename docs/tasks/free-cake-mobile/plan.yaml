@@ -1,0 +1,266 @@
+plan:
+  meta:
+    source_tech_doc: "docs/tasks/free-cake-mobile/tech-solution.yaml"
+    scope: "P0"
+    test_coverage_target: 80
+    min_tests_per_feature: 2
+    platform: "mobile"
+
+  tasks:
+    # === Phase 1: 项目基础设施 ===
+
+    - id: "T0-infra"
+      priority: "P0"
+      type: "infra"
+      title: "初始化 React Native 项目骨架"
+      files:
+        - "mobile/package.json"
+        - "mobile/tsconfig.json"
+        - "mobile/babel.config.js"
+        - "mobile/metro.config.js"
+        - "mobile/App.tsx"
+        - "mobile/src/utils/constants.ts"
+        - "mobile/src/theme/colors.ts"
+        - "mobile/src/theme/typography.ts"
+        - "mobile/src/theme/spacing.ts"
+        - "mobile/src/theme/index.ts"
+      depends_on: []
+      definition_of_done:
+        - "React Native 项目可启动"
+        - "TypeScript 编译配置完成"
+        - "主题常量与配色定义完成"
+        - "App.tsx 入口渲染成功"
+
+    # === Phase 2: 类型定义 ===
+
+    - id: "T1-types"
+      priority: "P0"
+      type: "code"
+      title: "定义核心类型"
+      files:
+        - "mobile/src/types/activity.ts"
+        - "mobile/src/types/entry.ts"
+        - "mobile/src/types/vote.ts"
+        - "mobile/src/types/user.ts"
+        - "mobile/src/types/redeem.ts"
+        - "mobile/src/utils/validators.ts"
+        - "mobile/src/utils/formatters.ts"
+      depends_on: ["T0-infra"]
+      definition_of_done:
+        - "Activity/Entry/Vote/User/Redeem 类型定义完成"
+        - "手机号校验与赛区范围校验工具完成"
+        - "日期/票数/排名格式化工具完成"
+
+    # === Phase 3: 服务层 ===
+
+    - id: "T2-service-test"
+      priority: "P0"
+      type: "test"
+      title: "服务层单元测试"
+      test_type: "pure"
+      file: "mobile/src/__tests__/services/api.test.ts"
+      given: "配置API基础地址和JWT"
+      when: "调用API服务方法"
+      then:
+        - "API请求正确携带JWT token"
+        - "请求超时重试机制生效"
+        - "401响应自动跳转登录"
+        - "MMKV存储读写正确"
+      depends_on: ["T1-types"]
+
+    - id: "P0-services"
+      priority: "P0"
+      type: "code"
+      title: "实现核心服务层"
+      files:
+        - "mobile/src/services/api.ts"
+        - "mobile/src/services/auth.ts"
+        - "mobile/src/services/location.ts"
+        - "mobile/src/services/storage.ts"
+        - "mobile/src/services/share.ts"
+      depends_on: ["T2-service-test"]
+      definition_of_done:
+        - "API请求封装（Axios+JWT+重试+超时）完成"
+        - "认证服务（登录/验证码/token管理）完成"
+        - "定位服务（GPS获取/赛区匹配）完成"
+        - "本地存储（MMKV/领奖码离线缓存）完成"
+        - "分享服务（海报生成/微信分享）完成"
+
+    # === Phase 4: 认证 ===
+
+    - id: "T3-auth-test"
+      priority: "P0"
+      type: "test"
+      title: "认证模块测试"
+      test_type: "pure"
+      file: "mobile/src/__tests__/context/AuthContext.test.tsx"
+      given: "用户提交手机号和验证码"
+      when: "调用登录流程"
+      then:
+        - "登录成功后token存储到MMKV"
+        - "赛区ID正确返回"
+        - "登录失败时错误信息展示"
+        - "token过期自动刷新"
+      depends_on: ["P0-services"]
+
+    - id: "P0-auth"
+      priority: "P0"
+      type: "code"
+      title: "实现认证上下文与登录页"
+      files:
+        - "mobile/src/context/AuthContext.tsx"
+        - "mobile/src/hooks/useAuth.ts"
+        - "mobile/src/screens/LoginScreen.tsx"
+        - "mobile/src/components/RegionGuard.tsx"
+      depends_on: ["T3-auth-test"]
+      definition_of_done:
+        - "AuthContext完成（login/logout/getToken/regionId）"
+        - "useAuth Hook完成"
+        - "登录页面完成（手机号+验证码）"
+        - "赛区校验守卫完成"
+        - "对应测试通过"
+
+    # === Phase 5: 导航与首页 ===
+
+    - id: "T4-nav-test"
+      priority: "P0"
+      type: "test"
+      title: "导航与首页测试"
+      test_type: "component"
+      file: "mobile/src/__tests__/navigation/AppNavigator.test.tsx"
+      given: "认证状态变化"
+      when: "切换登录/主页面"
+      then:
+        - "未登录时显示登录页"
+        - "登录后切换到Tab导航"
+        - "Tab导航正确渲染3个页面"
+      depends_on: ["P0-auth"]
+
+    - id: "P0-navigation-home"
+      priority: "P0"
+      type: "code"
+      title: "实现导航与首页"
+      files:
+        - "mobile/src/navigation/AppNavigator.tsx"
+        - "mobile/src/navigation/TabNavigator.tsx"
+        - "mobile/src/navigation/HomeStack.tsx"
+        - "mobile/src/context/ActivityContext.tsx"
+        - "mobile/src/hooks/useActivity.ts"
+        - "mobile/src/hooks/useLocation.ts"
+        - "mobile/src/hooks/useNetwork.ts"
+        - "mobile/src/screens/HomeScreen.tsx"
+        - "mobile/src/components/CountdownBanner.tsx"
+        - "mobile/src/components/CakeCard.tsx"
+      depends_on: ["T4-nav-test"]
+      definition_of_done:
+        - "根导航完成（登录/主页切换）"
+        - "Tab导航完成（首页/排行/我的）"
+        - "首页完成（Banner+CTA+热门作品+规则）"
+        - "倒计时横幅组件完成"
+        - "蛋糕卡片组件完成"
+        - "对应测试通过"
+
+    # === Phase 6: AI生成与发布 ===
+
+    - id: "T5-generate-test"
+      priority: "P0"
+      type: "test"
+      title: "AI生成与发布测试"
+      test_type: "pure"
+      file: "mobile/src/__tests__/screens/GenerateScreen.test.tsx"
+      given: "用户在服务范围内提交蛋糕设计需求"
+      when: "调用AI生成和发布流程"
+      then:
+        - "表单提交后展示loading"
+        - "生成成功展示5张效果图"
+        - "选图后可进入发布页"
+        - "发布成功返回作品ID"
+      depends_on: ["P0-navigation-home"]
+
+    - id: "P0-generate-publish"
+      priority: "P0"
+      type: "code"
+      title: "实现AI生成与发布页面"
+      files:
+        - "mobile/src/screens/GenerateScreen.tsx"
+        - "mobile/src/screens/PublishScreen.tsx"
+        - "mobile/src/components/SharePoster.tsx"
+      depends_on: ["T5-generate-test"]
+      definition_of_done:
+        - "AI生成页完成（表单+5图展示+选图）"
+        - "作品发布页完成（确认+分享海报）"
+        - "分享海报组件完成"
+        - "对应测试通过"
+
+    # === Phase 7: 投票与排行 ===
+
+    - id: "T6-vote-test"
+      priority: "P0"
+      type: "test"
+      title: "投票与排行测试"
+      test_type: "pure"
+      file: "mobile/src/__tests__/hooks/useVote.test.ts"
+      given: "活动处于投票阶段"
+      when: "调用投票和排行接口"
+      then:
+        - "正常投票成功返回剩余票数"
+        - "超过每日限制返回429处理"
+        - "风控拦截时展示冻结提示"
+        - "排行榜数据正确展示"
+      depends_on: ["P0-generate-publish"]
+
+    - id: "P0-vote-rank"
+      priority: "P0"
+      type: "code"
+      title: "实现投票与排行榜页面"
+      files:
+        - "mobile/src/screens/DetailScreen.tsx"
+        - "mobile/src/screens/RankScreen.tsx"
+        - "mobile/src/hooks/useVote.ts"
+        - "mobile/src/components/VoteButton.tsx"
+        - "mobile/src/components/RankBadge.tsx"
+        - "mobile/src/components/RiskTag.tsx"
+      depends_on: ["T6-vote-test"]
+      definition_of_done:
+        - "作品详情页完成（大图+投票+排名）"
+        - "排行榜页完成（Top榜单+赛区筛选）"
+        - "投票按钮完成（限频+动效）"
+        - "useVote Hook完成"
+        - "对应测试通过"
+
+    # === Phase 8: 领奖核销 ===
+
+    - id: "T7-redeem-test"
+      priority: "P0"
+      type: "test"
+      title: "领奖核销测试"
+      test_type: "pure"
+      file: "mobile/src/__tests__/screens/RedeemScreen.test.tsx"
+      given: "获奖用户持有领奖码"
+      when: "查看核销码和状态"
+      then:
+        - "二维码领奖码正确展示"
+        - "核销状态实时可查"
+        - "过期核销码展示过期提示"
+        - "离线时领奖码可本地缓存展示"
+      depends_on: ["P0-vote-rank"]
+
+    - id: "P0-redeem"
+      priority: "P0"
+      type: "code"
+      title: "实现领奖核销与我的页面"
+      files:
+        - "mobile/src/screens/RedeemScreen.tsx"
+        - "mobile/src/screens/ProfileScreen.tsx"
+        - "mobile/src/components/QRCodeCard.tsx"
+      depends_on: ["T7-redeem-test"]
+      definition_of_done:
+        - "领奖核销页完成（二维码+门店+状态）"
+        - "我的页面完成（作品/投票/领奖）"
+        - "二维码领奖卡组件完成"
+        - "对应测试通过"
+
+  commands:
+    test: "cd mobile && npx jest"
+    lint: "cd mobile && npx eslint src/ --fix"
+    typecheck: "cd mobile && npx tsc --noEmit"

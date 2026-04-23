@@ -1,0 +1,32 @@
+# Rust
+/target/
+server/target/
+**/*.rs.bk
+*.pdb
+
+# Node
+client/node_modules/
+client/dist/
+client/.vite/
+
+# Environment
+.env
+*.env.local
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# Build
+client/dist/

@@ -1,0 +1,27 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1024" height="1024" fill="#F5F3FF"/>
+  <ellipse cx="512" cy="834" rx="250" ry="44" fill="#DBD3EC"/>
+  <ellipse cx="512" cy="782" rx="238" ry="58" fill="#E9D5FF"/>
+  <rect x="288" y="472" width="448" height="302" rx="44" fill="#C084FC"/>
+  <rect x="312" y="504" width="400" height="234" rx="34" fill="#FAF5FF"/>
+  <ellipse cx="512" cy="458" rx="238" ry="82" fill="#FCFAFF"/>
+  <ellipse cx="512" cy="448" rx="223" ry="70" fill="#F3E8FF"/>
+  <g fill="#A855F7">
+    <circle cx="386" cy="434" r="22"/>
+    <circle cx="446" cy="404" r="22"/>
+    <circle cx="512" cy="390" r="24"/>
+    <circle cx="578" cy="404" r="22"/>
+    <circle cx="638" cy="434" r="22"/>
+  </g>
+  <g fill="#F472B6">
+    <path d="M512 505C560 450 640 500 620 570C572 590 530 562 512 505Z"/>
+    <path d="M512 505C464 450 384 500 404 570C452 590 494 562 512 505Z"/>
+  </g>
+  <g fill="#FB7185">
+    <circle cx="456" cy="640" r="16"/>
+    <circle cx="512" cy="620" r="16"/>
+    <circle cx="568" cy="640" r="16"/>
+  </g>
+  <text x="418" y="728" font-size="56" font-family="Arial" font-weight="700" fill="#7E22CE">Romance</text>
+  <text x="340" y="780" font-size="34" font-family="Arial" fill="#7E22CE">Wedding Theme Sample</text>
+</svg>

@@ -1,0 +1,27 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1024" height="1024" fill="#FFF8EE"/>
+  <ellipse cx="512" cy="836" rx="250" ry="44" fill="#E6D8C8"/>
+  <ellipse cx="512" cy="782" rx="238" ry="58" fill="#FDE7C7"/>
+  <rect x="288" y="472" width="448" height="300" rx="44" fill="#F59E0B"/>
+  <rect x="312" y="504" width="400" height="232" rx="34" fill="#FFF7ED"/>
+  <ellipse cx="512" cy="458" rx="238" ry="82" fill="#FFF9F1"/>
+  <ellipse cx="512" cy="448" rx="223" ry="70" fill="#FDE68A"/>
+  <g fill="#FB923C">
+    <circle cx="390" cy="430" r="24"/>
+    <circle cx="452" cy="402" r="24"/>
+    <circle cx="512" cy="390" r="24"/>
+    <circle cx="572" cy="402" r="24"/>
+    <circle cx="634" cy="430" r="24"/>
+  </g>
+  <g fill="#7C3AED">
+    <path d="M430 540L470 500L510 540L470 580L430 540Z"/>
+    <path d="M514 540L554 500L594 540L554 580L514 540Z"/>
+  </g>
+  <g fill="#EF4444">
+    <circle cx="445" cy="632" r="20"/>
+    <circle cx="512" cy="608" r="20"/>
+    <circle cx="579" cy="632" r="20"/>
+  </g>
+  <text x="410" y="725" font-size="56" font-family="Arial" font-weight="700" fill="#9A3412">Festival</text>
+  <text x="345" y="778" font-size="34" font-family="Arial" fill="#9A3412">Town Celebration Cake</text>
+</svg>

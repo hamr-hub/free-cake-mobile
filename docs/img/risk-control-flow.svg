@@ -1,0 +1,38 @@
+<svg width="1600" height="900" viewBox="0 0 1600 900" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1600" height="900" fill="#FFF7F7"/>
+  <text x="70" y="80" font-size="40" font-family="Arial" font-weight="700" fill="#111827">投票风控策略图</text>
+  <text x="70" y="120" font-size="20" font-family="Arial" fill="#6B7280">多维度风控识别与票据状态流转</text>
+
+  <rect x="80" y="260" width="220" height="120" rx="24" fill="#DBEAFE"/>
+  <text x="130" y="333" font-size="30" font-family="Arial" font-weight="700" fill="#1D4ED8">用户投票</text>
+
+  <rect x="400" y="220" width="280" height="200" rx="24" fill="#FEF3C7"/>
+  <text x="455" y="275" font-size="30" font-family="Arial" font-weight="700" fill="#92400E">风控校验</text>
+  <text x="445" y="325" font-size="22" font-family="Arial" fill="#374151">手机号 / OpenID</text>
+  <text x="445" y="360" font-size="22" font-family="Arial" fill="#374151">设备指纹 / IP</text>
+  <text x="445" y="395" font-size="22" font-family="Arial" fill="#374151">定位 / 频率 / 黑名单</text>
+
+  <rect x="800" y="120" width="260" height="120" rx="24" fill="#DCFCE7"/>
+  <text x="855" y="193" font-size="30" font-family="Arial" font-weight="700" fill="#166534">有效票</text>
+  <rect x="800" y="300" width="260" height="120" rx="24" fill="#FDE68A"/>
+  <text x="843" y="373" font-size="30" font-family="Arial" font-weight="700" fill="#92400E">待审票</text>
+  <rect x="800" y="480" width="260" height="120" rx="24" fill="#FECACA"/>
+  <text x="868" y="553" font-size="30" font-family="Arial" font-weight="700" fill="#B91C1C">废票</text>
+
+  <rect x="1180" y="220" width="300" height="280" rx="24" fill="#FFFFFF" stroke="#FCA5A5" stroke-width="2"/>
+  <text x="1245" y="275" font-size="30" font-family="Arial" font-weight="700" fill="#991B1B">人工复核台</text>
+  <text x="1225" y="330" font-size="22" font-family="Arial" fill="#374151">• 查看异常明细</text>
+  <text x="1225" y="375" font-size="22" font-family="Arial" fill="#374151">• 批量冻结 / 解冻</text>
+  <text x="1225" y="420" font-size="22" font-family="Arial" fill="#374151">• 扣减异常票数</text>
+  <text x="1225" y="465" font-size="22" font-family="Arial" fill="#374151">• 写入审计日志</text>
+
+  <g stroke="#9CA3AF" stroke-width="8" stroke-linecap="round">
+    <path d="M300 320H400"/>
+    <path d="M680 255H800"/>
+    <path d="M680 320H800"/>
+    <path d="M680 385H800"/>
+    <path d="M1060 360H1180"/>
+  </g>
+
+  <text x="72" y="760" font-size="24" font-family="Arial" fill="#6B7280">规则命中后，票据进入不同状态池，排行榜只读取有效票，待审票需人工复核后再转正或作废。</text>
+</svg>

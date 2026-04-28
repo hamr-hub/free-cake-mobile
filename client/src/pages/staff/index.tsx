@@ -6,7 +6,7 @@ export const StaffList: React.FC = () => {
   const { tableProps } = useTable({ resource: "staff" });
 
   return (
-    <List>
+    <List canCreate>
       <Table {...tableProps} rowKey="id">
         <Table.Column dataIndex="id" title="ID" width={60} />
         <Table.Column dataIndex="name" title="姓名" width={100} />
@@ -21,3 +21,5 @@ export const StaffList: React.FC = () => {
     </List>
   );
 };
+
+export { StaffCreate } from "./create";

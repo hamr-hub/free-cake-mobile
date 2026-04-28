@@ -8,3 +8,7 @@ pub mod redeem;
 pub mod inventory;
 pub mod store;
 pub mod dashboard;
+pub mod region;
+pub mod production;
+pub mod staff_handler;
+pub mod query_handlers;

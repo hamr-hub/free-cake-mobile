@@ -113,3 +113,60 @@ pub async fn schedule(
         task_ids: vec![task_id],
     }))
 }
+
+#[derive(Serialize)]
+pub struct ResendCodeResponse {
+    pub new_code: String,
+    pub order_id: i64,
+}
+
+pub async fn resend_code(
+    State(state): State<AppState>,
+    Path(order_id): Path<i64>,
+) -> Result<Json<ResendCodeResponse>, AppError> {
+    let order = sqlx::query("SELECT id, redeem_status FROM reward_order WHERE id = ?")
+        .bind(order_id)
+        .fetch_optional(&state.db_pool)
+        .await
+        .map_err(|e| AppError::Internal(e.to_string()))?;
+    let _row = order.ok_or_else(|| AppError::NotFound("Order not found".into()))?;
+
+    let old_codes = sqlx::query("SELECT id, code, status FROM redeem_code WHERE order_id = ?")
+        .bind(order_id)
+        .fetch_all(&state.db_pool)
+        .await
+        .map_err(|e| AppError::Internal(e.to_string()))?;
+
+    for code_row in &old_codes {
+        let code_id: i64 = code_row.get("id");
+        let code_status: String = code_row.get("status");
+        if code_status == "valid" || code_status == "expired" {
+            sqlx::query("UPDATE redeem_code SET status = 'invalid' WHERE id = ?")
+                .bind(code_id)
+                .execute(&state.db_pool)
+                .await
+                .map_err(|e| AppError::Internal(e.to_string()))?;
+        }
+    }
+
+    let new_code = uuid::Uuid::new_v4().to_string()[..8].to_string();
+    let expires_at = "2099-12-31 00:00:00";
+
+    sqlx::query("INSERT INTO redeem_code (order_id, code, expires_at, status) VALUES (?, ?, ?, 'valid')")
+        .bind(order_id)
+        .bind(&new_code)
+        .bind(expires_at)
+        .execute(&state.db_pool)
+        .await
+        .map_err(|e| AppError::Internal(e.to_string()))?;
+
+    sqlx::query("UPDATE reward_order SET redeem_status = 'pending' WHERE id = ? AND redeem_status IN ('redeemed', 'expired')")
+        .bind(order_id)
+        .execute(&state.db_pool)
+        .await
+        .map_err(|e| AppError::Internal(e.to_string()))?;
+
+    AuditLogService::log_with_pool(&state.db_pool, 0, "resend_redeem_code", "reward_order", order_id, &format!("new_code={}", new_code)).await;
+
+    Ok(Json(ResendCodeResponse { new_code, order_id }))
+}

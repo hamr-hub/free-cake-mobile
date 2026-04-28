@@ -1,10 +1,11 @@
-use axum::{extract::{State, Path}, Json};
+use axum::{extract::{State, Path, Extension}, Json};
 use serde::{Deserialize, Serialize};
 use sqlx::Row;
 use crate::AppState;
 use crate::errors::AppError;
 use crate::services::audit_log::AuditLogService;
 use crate::services::notification::NotificationService;
+use crate::app_middleware::auth::Claims;
 
 #[derive(Deserialize)]
 pub struct SettleRequest {
@@ -20,6 +21,7 @@ pub struct SettleResponse {
 
 pub async fn settle(
     State(state): State<AppState>,
+    Extension(claims): Extension<Claims>,
     Path(activity_id): Path<i64>,
     Json(req): Json<SettleRequest>,
 ) -> Result<Json<SettleResponse>, AppError> {
@@ -113,14 +115,13 @@ pub async fn settle(
         let order_id: i64 = order_id_result.get("id");
 
         let code = uuid::Uuid::new_v4().to_string()[..8].to_string();
-        let expires_at = "2099-12-31 00:00:00";
 
         sqlx::query(
-            "INSERT INTO redeem_code (order_id, code, expires_at, status) VALUES (?, ?, ?, 'valid')"
+            "INSERT INTO redeem_code (order_id, code, expires_at, status) VALUES (?, ?, DATE_ADD((SELECT voting_end_at FROM activity WHERE id = ?), INTERVAL 7 DAY), 'valid')"
         )
         .bind(order_id)
         .bind(&code)
-        .bind(expires_at)
+        .bind(activity_id)
         .execute(&state.db_pool)
         .await
         .map_err(|e| AppError::Internal(e.to_string()))?;
@@ -133,8 +134,8 @@ pub async fn settle(
         .await
         .map_err(|e| AppError::Internal(e.to_string()))?;
 
-    AuditLogService::log_with_pool(&state.db_pool, 0, "activity_settled", "activity", activity_id, &format!("winner_count={}", winner_count)).await;
-    NotificationService::send_settle_notification(activity_id).await;
+    AuditLogService::log_with_pool(&state.db_pool, claims.user_id, "activity_settled", "activity", activity_id, &format!("winner_count={}", winner_count)).await;
+    NotificationService::send_settle_notification(&state.db_pool, activity_id).await;
 
     Ok(Json(SettleResponse {
         winner_count,

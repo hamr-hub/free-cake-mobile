@@ -6,12 +6,11 @@ use axum::{
     body::Body,
 };
 use jsonwebtoken::{decode, DecodingKey, Validation, Algorithm};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use crate::AppState;
 use crate::errors::AppError;
 
-#[derive(Debug, Deserialize, Clone)]
-#[allow(dead_code)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Claims {
     pub user_id: i64,
     pub role: String,
@@ -25,8 +24,7 @@ pub async fn auth_middleware(
 ) -> Result<Response, AppError> {
     let auth_header: Option<&str> = req.headers()
         .get("Authorization")
-        .map(|v| v.to_str().ok())
-        .flatten();
+        .and_then(|v| v.to_str().ok());
 
     let auth_header = auth_header
         .ok_or_else(|| AppError::Unauthorized("Missing Authorization header".into()))?;

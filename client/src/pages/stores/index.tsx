@@ -11,7 +11,7 @@ export const StoreList: React.FC = () => {
   const { tableProps } = useTable({ resource: "stores" });
 
   return (
-    <List>
+    <List canCreate>
       <Table {...tableProps} rowKey="id">
         <Table.Column dataIndex="id" title="ID" width={60} />
         <Table.Column dataIndex="name" title="门店名称" width={140} />
@@ -30,3 +30,5 @@ export const StoreList: React.FC = () => {
     </List>
   );
 };
+
+export { StoreCreate } from "./create";

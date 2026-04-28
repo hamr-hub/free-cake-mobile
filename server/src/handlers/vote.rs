@@ -1,4 +1,4 @@
-use axum::{extract::{State, Path, Query}, Json};
+use axum::{extract::{State, Path, Query, Extension}, Json};
 use serde::{Deserialize, Serialize};
 use sqlx::Row;
 use crate::AppState;
@@ -6,6 +6,7 @@ use crate::errors::AppError;
 use crate::db::models::ContestEntry;
 use crate::services::risk_control::RiskControlService;
 use crate::services::rank_cache::RankCacheService;
+use crate::app_middleware::auth::Claims;
 
 #[derive(Deserialize)]
 pub struct CastVoteRequest {
@@ -37,6 +38,7 @@ pub struct RankResponse {
 
 pub async fn cast(
     State(state): State<AppState>,
+    Extension(claims): Extension<Claims>,
     Path(entry_id): Path<i64>,
     Json(req): Json<CastVoteRequest>,
 ) -> Result<Json<CastVoteResponse>, AppError> {
@@ -60,7 +62,7 @@ pub async fn cast(
         return Err(AppError::NotFound("Entry not found or inactive".into()));
     }
 
-    let daily_key = format!("daily_votes:{}:{}", req.activity_id, 0);
+    let daily_key = format!("daily_votes:{}:{}", req.activity_id, claims.user_id);
     let mut conn = state.redis_client.get_multiplexed_async_connection().await
         .map_err(|e| AppError::Internal(e.to_string()))?;
     let count: i64 = redis::cmd("INCR")
@@ -95,10 +97,11 @@ pub async fn cast(
     let risk_tags_str = serde_json::to_string(&risk_tags).unwrap_or_default();
 
     let result = sqlx::query(
-        "INSERT INTO vote_record (activity_id, entry_id, voter_user_id, voter_phone_hash, voter_device_id, ip, geohash, vote_status, risk_tags) VALUES (?, ?, 0, ?, ?, ?, ?, ?, ?)"
+        "INSERT INTO vote_record (activity_id, entry_id, voter_user_id, voter_phone_hash, voter_device_id, ip, geohash, vote_status, risk_tags) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
     )
     .bind(req.activity_id)
     .bind(entry_id)
+    .bind(claims.user_id)
     .bind(phone_hash)
     .bind(device_id)
     .bind(ip)

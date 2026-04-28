@@ -173,7 +173,7 @@ pub async fn update_status(
     Ok(Json(serde_json::json!({ "id": id, "status": req.new_status })))
 }
 
-fn validate_status_transition(from: &str, to: &str) -> bool {
+pub fn validate_status_transition(from: &str, to: &str) -> bool {
     match from {
         "draft" => to == "registration_open",
         "registration_open" => to == "voting_open" || to == "draft",

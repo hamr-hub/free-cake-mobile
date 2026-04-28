@@ -11,7 +11,7 @@ export const RegionList: React.FC = () => {
   const { tableProps } = useTable({ resource: "regions" });
 
   return (
-    <List>
+    <List canCreate>
       <Table {...tableProps} rowKey="id">
         <Table.Column dataIndex="id" title="ID" width={60} />
         <Table.Column dataIndex="name" title="赛区名称" width={140} />
@@ -26,3 +26,5 @@ export const RegionList: React.FC = () => {
     </List>
   );
 };
+
+export { RegionCreate } from "./create";

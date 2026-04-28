@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use sqlx::Row;
 use crate::AppState;
 use crate::errors::AppError;
+pub use crate::app_middleware::auth::Claims;
 
 #[derive(Deserialize)]
 pub struct LoginRequest {
@@ -17,13 +18,6 @@ pub struct LoginResponse {
     pub token: String,
     pub user_id: i64,
     pub role: String,
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct Claims {
-    pub user_id: i64,
-    pub role: String,
-    pub exp: u64,
 }
 
 pub async fn login(

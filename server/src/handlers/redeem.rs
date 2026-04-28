@@ -77,7 +77,7 @@ pub async fn verify(
             } else if expires_at < chrono::Utc::now().naive_utc() {
                 VerifyRedeemResponse {
                     success: false,
-                    order_id: order_id,
+                    order_id,
                     fail_reason: Some("Redeem code has expired".into()),
                 }
             } else {
@@ -107,7 +107,7 @@ pub async fn verify(
 
                 VerifyRedeemResponse {
                     success: true,
-                    order_id: order_id,
+                    order_id,
                     fail_reason: None,
                 }
             }

@@ -61,7 +61,7 @@ pub async fn get_by_store(
         .collect();
 
     for alert in &alerts {
-        NotificationService::send_inventory_alert(store_id, alert.item_id).await;
+        NotificationService::send_inventory_alert(&state.db_pool, store_id, alert.item_id).await;
     }
 
     Ok(Json(StoreInventoryResponse { items, alerts }))

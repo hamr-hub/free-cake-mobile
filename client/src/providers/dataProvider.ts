@@ -42,6 +42,11 @@ function buildResourceUrl(resource: string): string {
   const specialResources: Record<string, string> = {
     "dashboard/stats": "dashboard/stats",
     "votes/risk": "votes/risk",
+    "settlement": "settlement",
+    "production": "production",
+    "redeem": "redeem",
+    "audit_log": "audit_log",
+    "entries": "entries",
   };
   const path = specialResources[resource] || resource;
   return `${API_URL}/${path}`;

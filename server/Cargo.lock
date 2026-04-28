@@ -620,6 +620,7 @@ dependencies = [
  "chrono",
  "dotenvy",
  "jsonwebtoken",
+ "rand",
  "redis",
  "reqwest",
  "serde",

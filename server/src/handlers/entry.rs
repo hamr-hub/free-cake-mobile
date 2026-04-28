@@ -1,8 +1,10 @@
-use axum::{extract::{State, Path}, Json};
+use axum::{extract::{State, Path, Extension}, Json};
 use serde::{Deserialize, Serialize};
 use sqlx::Row;
 use crate::AppState;
 use crate::errors::AppError;
+use crate::app_middleware::auth::Claims;
+use crate::services::audit_log::AuditLogService;
 use crate::services::ai_generator::AiGeneratorService;
 
 #[derive(Deserialize)]
@@ -110,6 +112,7 @@ pub async fn generate(
 
 pub async fn submit(
     State(state): State<AppState>,
+    Extension(claims): Extension<Claims>,
     Path(activity_id): Path<i64>,
     Json(req): Json<SubmitEntryRequest>,
 ) -> Result<Json<SubmitEntryResponse>, AppError> {
@@ -139,9 +142,10 @@ pub async fn submit(
     let share_code = uuid::Uuid::new_v4().to_string()[..8].to_string();
 
     let result = sqlx::query(
-        "INSERT INTO contest_entry (activity_id, user_id, selected_generation_id, selected_template_id, title, share_code, image_url, status) VALUES (?, 0, ?, ?, ?, ?, ?, 'active')"
+        "INSERT INTO contest_entry (activity_id, user_id, selected_generation_id, selected_template_id, title, share_code, image_url, status) VALUES (?, ?, ?, ?, ?, ?, ?, 'active')"
     )
     .bind(activity_id)
+    .bind(claims.user_id)
     .bind(req.selected_generation_id)
     .bind(req.selected_template_id)
     .bind(&req.title)
@@ -155,4 +159,115 @@ pub async fn submit(
         entry_id: result.last_insert_id() as i64,
         share_code,
     }))
+}
+
+#[derive(Deserialize)]
+pub struct UpdateEntryStatusRequest {
+    pub status: String,
+}
+
+pub async fn update_status(
+    State(state): State<AppState>,
+    Extension(claims): Extension<Claims>,
+    Path(entry_id): Path<i64>,
+    Json(req): Json<UpdateEntryStatusRequest>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    if req.status != "approved" && req.status != "rejected" && req.status != "active" {
+        return Err(AppError::BadRequest("Invalid status, must be approved/rejected/active".into()));
+    }
+
+    let exists = sqlx::query("SELECT id, status FROM contest_entry WHERE id = ?")
+        .bind(entry_id)
+        .fetch_optional(&state.db_pool)
+        .await
+        .map_err(|e| AppError::Internal(e.to_string()))?;
+    if exists.is_none() {
+        return Err(AppError::NotFound("Entry not found".into()));
+    }
+
+    sqlx::query("UPDATE contest_entry SET status = ? WHERE id = ?")
+        .bind(&req.status)
+        .bind(entry_id)
+        .execute(&state.db_pool)
+        .await
+        .map_err(|e| AppError::Internal(e.to_string()))?;
+
+    AuditLogService::log_with_pool(&state.db_pool, claims.user_id, "entry_status_update", "contest_entry", entry_id, &format!("new_status={}", req.status)).await;
+
+    Ok(Json(serde_json::json!({ "id": entry_id, "status": req.status })))
+}
+
+#[derive(Deserialize)]
+pub struct FreezeEntryRequest {
+    pub freeze: bool,
+}
+
+pub async fn freeze(
+    State(state): State<AppState>,
+    Extension(claims): Extension<Claims>,
+    Path(entry_id): Path<i64>,
+    Json(req): Json<FreezeEntryRequest>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    let new_status = if req.freeze { "frozen" } else { "active" };
+
+    let exists = sqlx::query("SELECT id FROM contest_entry WHERE id = ?")
+        .bind(entry_id)
+        .fetch_optional(&state.db_pool)
+        .await
+        .map_err(|e| AppError::Internal(e.to_string()))?;
+    if exists.is_none() {
+        return Err(AppError::NotFound("Entry not found".into()));
+    }
+
+    sqlx::query("UPDATE contest_entry SET status = ? WHERE id = ?")
+        .bind(new_status)
+        .bind(entry_id)
+        .execute(&state.db_pool)
+        .await
+        .map_err(|e| AppError::Internal(e.to_string()))?;
+
+    AuditLogService::log_with_pool(&state.db_pool, claims.user_id, if req.freeze { "entry_frozen" } else { "entry_unfrozen" }, "contest_entry", entry_id, &format!("freeze={}", req.freeze)).await;
+
+    Ok(Json(serde_json::json!({ "id": entry_id, "status": new_status })))
+}
+
+#[derive(Deserialize)]
+pub struct DeductVotesRequest {
+    pub count: i32,
+    pub reason: String,
+}
+
+pub async fn deduct_votes(
+    State(state): State<AppState>,
+    Extension(claims): Extension<Claims>,
+    Path(entry_id): Path<i64>,
+    Json(req): Json<DeductVotesRequest>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    if req.count <= 0 {
+        return Err(AppError::BadRequest("Count must be positive".into()));
+    }
+
+    let entry = sqlx::query("SELECT id, valid_vote_count FROM contest_entry WHERE id = ?")
+        .bind(entry_id)
+        .fetch_optional(&state.db_pool)
+        .await
+        .map_err(|e| AppError::Internal(e.to_string()))?
+        .ok_or_else(|| AppError::NotFound("Entry not found".into()))?;
+
+    let current_votes: i32 = entry.get("valid_vote_count");
+    let new_votes = current_votes - req.count;
+    if new_votes < 0 {
+        return Err(AppError::BadRequest(format!("Cannot deduct {} votes from entry with {} valid votes", req.count, current_votes)));
+    }
+
+    sqlx::query("UPDATE contest_entry SET valid_vote_count = ? WHERE id = ?")
+        .bind(new_votes)
+        .bind(entry_id)
+        .execute(&state.db_pool)
+        .await
+        .map_err(|e| AppError::Internal(e.to_string()))?;
+
+    AuditLogService::log_with_pool(&state.db_pool, claims.user_id, "votes_deducted", "contest_entry", entry_id, &format!("deducted={}, reason={}, before={}, after={}", req.count, req.reason, current_votes, new_votes)).await;
+
+    Ok(Json(serde_json::json!({ "id": entry_id, "valid_vote_count": new_votes, "deducted": req.count })))
 }

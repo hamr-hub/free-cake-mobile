@@ -3,6 +3,8 @@
 CREATE TABLE IF NOT EXISTS region (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
+    province VARCHAR(50) NOT NULL DEFAULT '',
+    city VARCHAR(50) NOT NULL DEFAULT '',
     coverage_radius_km INT NOT NULL DEFAULT 10,
     center_lat DOUBLE NOT NULL,
     center_lng DOUBLE NOT NULL,

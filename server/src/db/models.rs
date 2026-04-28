@@ -7,6 +7,8 @@ use sqlx::FromRow;
 pub struct Region {
     pub id: i64,
     pub name: String,
+    pub province: String,
+    pub city: String,
     pub coverage_radius_km: i32,
     pub center_lat: f64,
     pub center_lng: f64,
@@ -254,5 +256,28 @@ pub struct AuditLog {
     pub target_type: String,
     pub target_id: i64,
     pub detail: String,
+    pub created_at: NaiveDateTime,
+}
+
+#[derive(Debug, FromRow, Serialize, Deserialize)]
+pub struct Staff {
+    pub id: i64,
+    pub store_id: i64,
+    pub name: String,
+    pub phone: String,
+    pub role: String,
+    pub status: String,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
+}
+
+#[derive(Debug, FromRow, Serialize, Deserialize)]
+pub struct AttendanceRecord {
+    pub id: i64,
+    pub staff_id: i64,
+    pub store_id: i64,
+    pub check_in_at: Option<NaiveDateTime>,
+    pub check_out_at: Option<NaiveDateTime>,
+    pub status: String,
     pub created_at: NaiveDateTime,
 }

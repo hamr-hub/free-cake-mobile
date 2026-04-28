@@ -1,17 +1,23 @@
 # Rust
-/target/
 server/target/
 **/*.rs.bk
 *.pdb
 
 # Node
+node_modules/
 client/node_modules/
+mobile/node_modules/
 client/dist/
 client/.vite/
+
+# Mobile
+mobile/.expo/
+mobile/.bundle/
 
 # Environment
 .env
 *.env.local
+.env.docker
 
 # IDE
 .idea/
@@ -19,6 +25,11 @@ client/.vite/
 *.swp
 *.swo
 *~
+
+# AI tools
+.ai-flow.config.js
+.codeflicker/
+.claude/
 
 # OS
 .DS_Store
@@ -30,3 +41,9 @@ npm-debug.log*
 
 # Build
 client/dist/
+
+# Lock files (keep pnpm-lock.yaml, ignore npm)
+package-lock.json
+
+# Changelog (auto-generated)
+changelog/

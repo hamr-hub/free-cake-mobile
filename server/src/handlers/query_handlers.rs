@@ -26,30 +26,36 @@ pub async fn list(
     let page_size = params.page_size.unwrap_or(20).clamp(1, 100);
     let offset = (page - 1) * page_size;
 
-    let mut where_clauses = vec!["1=1".to_string()];
+    let mut query_builder = sqlx::QueryBuilder::<sqlx::Postgres>::new("SELECT * FROM audit_log WHERE 1=1");
+    let mut count_builder = sqlx::QueryBuilder::<sqlx::Postgres>::new("SELECT COUNT(*) FROM audit_log WHERE 1=1");
+
     if let Some(ref tt) = params.target_type {
-        where_clauses.push(format!("target_type = '{}'", tt));
+        query_builder.push(" AND target_type = ");
+        query_builder.push_bind(tt);
+        count_builder.push(" AND target_type = ");
+        count_builder.push_bind(tt);
     }
     if let Some(tid) = params.target_id {
-        where_clauses.push(format!("target_id = {}", tid));
+        query_builder.push(" AND target_id = ");
+        query_builder.push_bind(tid);
+        count_builder.push(" AND target_id = ");
+        count_builder.push_bind(tid);
     }
-    let where_str = where_clauses.join(" AND ");
 
-    let total = sqlx::query_scalar::<_, i64>(
-        &format!("SELECT COUNT(*) FROM audit_log WHERE {}", where_str)
-    )
-    .fetch_one(&state.db_pool)
-    .await
-    .map_err(|e| AppError::Internal(e.to_string()))?;
+    query_builder.push(" ORDER BY created_at DESC LIMIT ");
+    query_builder.push_bind(page_size);
+    query_builder.push(" OFFSET ");
+    query_builder.push_bind(offset);
 
-    let list = sqlx::query_as::<_, AuditLog>(
-        &format!("SELECT * FROM audit_log WHERE {} ORDER BY created_at DESC LIMIT ? OFFSET ?", where_str)
-    )
-    .bind(page_size)
-    .bind(offset)
-    .fetch_all(&state.db_pool)
-    .await
-    .map_err(|e| AppError::Internal(e.to_string()))?;
+    let total: i64 = count_builder.build_query_scalar::<i64>()
+        .fetch_one(&state.db_pool)
+        .await
+        .map_err(|e| AppError::Internal(e.to_string()))?;
+
+    let list = query_builder.build_query_as::<AuditLog>()
+        .fetch_all(&state.db_pool)
+        .await
+        .map_err(|e| AppError::Internal(e.to_string()))?;
 
     Ok(Json(AuditLogListResponse { list, total }))
 }
@@ -132,30 +138,40 @@ pub async fn vote_risk_list(
     let page_size = params.page_size.unwrap_or(20).clamp(1, 100);
     let offset = (page - 1) * page_size;
 
-    let mut where_clauses = vec!["vote_status IN ('frozen', 'invalid')".to_string()];
-    if let Some(ref aid) = params.activity_id {
-        where_clauses.push(format!("activity_id = {}", aid));
+    let mut query_builder = sqlx::QueryBuilder::<sqlx::Postgres>::new(
+        "SELECT * FROM vote_record WHERE vote_status IN ('frozen', 'invalid')"
+    );
+    let mut count_builder = sqlx::QueryBuilder::<sqlx::Postgres>::new(
+        "SELECT COUNT(*) FROM vote_record WHERE vote_status IN ('frozen', 'invalid')"
+    );
+
+    if let Some(aid) = params.activity_id {
+        query_builder.push(" AND activity_id = ");
+        query_builder.push_bind(aid);
+        count_builder.push(" AND activity_id = ");
+        count_builder.push_bind(aid);
     }
     if let Some(ref vs) = params.vote_status {
-        where_clauses.push(format!("vote_status = '{}'", vs));
+        query_builder.push(" AND vote_status = ");
+        query_builder.push_bind(vs);
+        count_builder.push(" AND vote_status = ");
+        count_builder.push_bind(vs);
     }
-    let where_str = where_clauses.join(" AND ");
 
-    let total = sqlx::query_scalar::<_, i64>(
-        &format!("SELECT COUNT(*) FROM vote_record WHERE {}", where_str)
-    )
-    .fetch_one(&state.db_pool)
-    .await
-    .map_err(|e| AppError::Internal(e.to_string()))?;
+    query_builder.push(" ORDER BY created_at DESC LIMIT ");
+    query_builder.push_bind(page_size);
+    query_builder.push(" OFFSET ");
+    query_builder.push_bind(offset);
 
-    let list = sqlx::query_as::<_, VoteRecord>(
-        &format!("SELECT * FROM vote_record WHERE {} ORDER BY created_at DESC LIMIT ? OFFSET ?", where_str)
-    )
-    .bind(page_size)
-    .bind(offset)
-    .fetch_all(&state.db_pool)
-    .await
-    .map_err(|e| AppError::Internal(e.to_string()))?;
+    let total: i64 = count_builder.build_query_scalar::<i64>()
+        .fetch_one(&state.db_pool)
+        .await
+        .map_err(|e| AppError::Internal(e.to_string()))?;
+
+    let list = query_builder.build_query_as::<VoteRecord>()
+        .fetch_all(&state.db_pool)
+        .await
+        .map_err(|e| AppError::Internal(e.to_string()))?;
 
     Ok(Json(VoteRiskListResponse { list, total }))
 }
@@ -198,30 +214,36 @@ pub async fn winner_list(
     let page_size = params.page_size.unwrap_or(20).clamp(1, 100);
     let offset = (page - 1) * page_size;
 
-    let mut where_clauses = vec!["1=1".to_string()];
-    if let Some(ref aid) = params.activity_id {
-        where_clauses.push(format!("w.activity_id = {}", aid));
+    let mut count_builder = sqlx::QueryBuilder::<sqlx::Postgres>::new(
+        "SELECT COUNT(*) FROM winner_record w WHERE 1=1"
+    );
+    let mut query_builder = sqlx::QueryBuilder::<sqlx::Postgres>::new(
+        "SELECT w.id, w.activity_id, w.entry_id, w.user_id, w.rank, w.valid_vote_count, w.status, w.created_at, r.store_id, r.production_status, r.redeem_status FROM winner_record w LEFT JOIN reward_order r ON r.winner_id = w.id WHERE 1=1"
+    );
+
+    if let Some(aid) = params.activity_id {
+        count_builder.push(" AND w.activity_id = ");
+        count_builder.push_bind(aid);
+        query_builder.push(" AND w.activity_id = ");
+        query_builder.push_bind(aid);
     }
-    let where_str = where_clauses.join(" AND ");
 
-    let total = sqlx::query_scalar::<_, i64>(
-        &format!("SELECT COUNT(*) FROM winner_record w WHERE {}", where_str)
-    )
-    .fetch_one(&state.db_pool)
-    .await
-    .map_err(|e| AppError::Internal(e.to_string()))?;
+    query_builder.push(" ORDER BY w.rank ASC LIMIT ");
+    query_builder.push_bind(page_size);
+    query_builder.push(" OFFSET ");
+    query_builder.push_bind(offset);
 
-    let rows = sqlx::query(
-        &format!(
-            "SELECT w.id, w.activity_id, w.entry_id, w.user_id, w.rank, w.valid_vote_count, w.status, w.created_at, r.store_id, r.production_status, r.redeem_status FROM winner_record w LEFT JOIN reward_order r ON r.winner_id = w.id WHERE {} ORDER BY w.rank ASC LIMIT ? OFFSET ?",
-            where_str
-        )
-    )
-    .bind(page_size)
-    .bind(offset)
-    .fetch_all(&state.db_pool)
-    .await
-    .map_err(|e| AppError::Internal(e.to_string()))?;
+    let total: i64 = count_builder.build_query_scalar::<i64>()
+        .fetch_one(&state.db_pool)
+        .await
+        .map_err(|e| AppError::Internal(e.to_string()))?;
+
+    let rows = query_builder.build()
+        .bind(page_size)
+        .bind(offset)
+        .fetch_all(&state.db_pool)
+        .await
+        .map_err(|e| AppError::Internal(e.to_string()))?;
 
     let list = rows.iter().map(|row| WinnerWithOrder {
         id: row.get::<i64, _>("id"),
@@ -264,30 +286,36 @@ pub async fn production_list(
     let page_size = params.page_size.unwrap_or(20).clamp(1, 100);
     let offset = (page - 1) * page_size;
 
-    let mut where_clauses = vec!["1=1".to_string()];
-    if let Some(ref sid) = params.store_id {
-        where_clauses.push(format!("store_id = {}", sid));
+    let mut query_builder = sqlx::QueryBuilder::<sqlx::Postgres>::new("SELECT * FROM production_task WHERE 1=1");
+    let mut count_builder = sqlx::QueryBuilder::<sqlx::Postgres>::new("SELECT COUNT(*) FROM production_task WHERE 1=1");
+
+    if let Some(sid) = params.store_id {
+        query_builder.push(" AND store_id = ");
+        query_builder.push_bind(sid);
+        count_builder.push(" AND store_id = ");
+        count_builder.push_bind(sid);
     }
     if let Some(ref ts) = params.task_status {
-        where_clauses.push(format!("task_status = '{}'", ts));
+        query_builder.push(" AND task_status = ");
+        query_builder.push_bind(ts);
+        count_builder.push(" AND task_status = ");
+        count_builder.push_bind(ts);
     }
-    let where_str = where_clauses.join(" AND ");
 
-    let total = sqlx::query_scalar::<_, i64>(
-        &format!("SELECT COUNT(*) FROM production_task WHERE {}", where_str)
-    )
-    .fetch_one(&state.db_pool)
-    .await
-    .map_err(|e| AppError::Internal(e.to_string()))?;
+    query_builder.push(" ORDER BY created_at DESC LIMIT ");
+    query_builder.push_bind(page_size);
+    query_builder.push(" OFFSET ");
+    query_builder.push_bind(offset);
 
-    let list = sqlx::query_as::<_, ProductionTask>(
-        &format!("SELECT * FROM production_task WHERE {} ORDER BY created_at DESC LIMIT ? OFFSET ?", where_str)
-    )
-    .bind(page_size)
-    .bind(offset)
-    .fetch_all(&state.db_pool)
-    .await
-    .map_err(|e| AppError::Internal(e.to_string()))?;
+    let total: i64 = count_builder.build_query_scalar::<i64>()
+        .fetch_one(&state.db_pool)
+        .await
+        .map_err(|e| AppError::Internal(e.to_string()))?;
+
+    let list = query_builder.build_query_as::<ProductionTask>()
+        .fetch_all(&state.db_pool)
+        .await
+        .map_err(|e| AppError::Internal(e.to_string()))?;
 
     Ok(Json(ProductionListResponse { list, total }))
 }
@@ -316,30 +344,36 @@ pub async fn redeem_list(
     let page_size = params.page_size.unwrap_or(20).clamp(1, 100);
     let offset = (page - 1) * page_size;
 
-    let mut where_clauses = vec!["1=1".to_string()];
-    if let Some(ref oid) = params.order_id {
-        where_clauses.push(format!("order_id = {}", oid));
+    let mut query_builder = sqlx::QueryBuilder::<sqlx::Postgres>::new("SELECT * FROM redeem_code WHERE 1=1");
+    let mut count_builder = sqlx::QueryBuilder::<sqlx::Postgres>::new("SELECT COUNT(*) FROM redeem_code WHERE 1=1");
+
+    if let Some(oid) = params.order_id {
+        query_builder.push(" AND order_id = ");
+        query_builder.push_bind(oid);
+        count_builder.push(" AND order_id = ");
+        count_builder.push_bind(oid);
     }
     if let Some(ref s) = params.status {
-        where_clauses.push(format!("status = '{}'", s));
+        query_builder.push(" AND status = ");
+        query_builder.push_bind(s);
+        count_builder.push(" AND status = ");
+        count_builder.push_bind(s);
     }
-    let where_str = where_clauses.join(" AND ");
 
-    let total = sqlx::query_scalar::<_, i64>(
-        &format!("SELECT COUNT(*) FROM redeem_code WHERE {}", where_str)
-    )
-    .fetch_one(&state.db_pool)
-    .await
-    .map_err(|e| AppError::Internal(e.to_string()))?;
+    query_builder.push(" ORDER BY created_at DESC LIMIT ");
+    query_builder.push_bind(page_size);
+    query_builder.push(" OFFSET ");
+    query_builder.push_bind(offset);
 
-    let list = sqlx::query_as::<_, RedeemCode>(
-        &format!("SELECT * FROM redeem_code WHERE {} ORDER BY created_at DESC LIMIT ? OFFSET ?", where_str)
-    )
-    .bind(page_size)
-    .bind(offset)
-    .fetch_all(&state.db_pool)
-    .await
-    .map_err(|e| AppError::Internal(e.to_string()))?;
+    let total: i64 = count_builder.build_query_scalar::<i64>()
+        .fetch_one(&state.db_pool)
+        .await
+        .map_err(|e| AppError::Internal(e.to_string()))?;
+
+    let list = query_builder.build_query_as::<RedeemCode>()
+        .fetch_all(&state.db_pool)
+        .await
+        .map_err(|e| AppError::Internal(e.to_string()))?;
 
     Ok(Json(RedeemListResponse { list, total }))
 }
@@ -389,33 +423,40 @@ pub async fn entry_list(
     let page_size = params.page_size.unwrap_or(20).clamp(1, 100);
     let offset = (page - 1) * page_size;
 
-    let mut where_clauses = vec!["1=1".to_string()];
-    if let Some(ref aid) = params.activity_id {
-        where_clauses.push(format!("e.activity_id = {}", aid));
+    let mut count_builder = sqlx::QueryBuilder::<sqlx::Postgres>::new(
+        "SELECT COUNT(*) FROM contest_entry e WHERE 1=1"
+    );
+    let mut query_builder = sqlx::QueryBuilder::<sqlx::Postgres>::new(
+        "SELECT e.*, u.nickname AS user_name, r.name AS region_name FROM contest_entry e LEFT JOIN app_user u ON e.user_id = u.id LEFT JOIN activity a ON e.activity_id = a.id LEFT JOIN region r ON a.region_id = r.id WHERE 1=1"
+    );
+
+    if let Some(aid) = params.activity_id {
+        count_builder.push(" AND e.activity_id = ");
+        count_builder.push_bind(aid);
+        query_builder.push(" AND e.activity_id = ");
+        query_builder.push_bind(aid);
     }
     if let Some(ref s) = params.status {
-        where_clauses.push(format!("e.status = '{}'", s));
+        count_builder.push(" AND e.status = ");
+        count_builder.push_bind(s);
+        query_builder.push(" AND e.status = ");
+        query_builder.push_bind(s);
     }
-    let where_str = where_clauses.join(" AND ");
 
-    let total = sqlx::query_scalar::<_, i64>(
-        &format!("SELECT COUNT(*) FROM contest_entry e WHERE {}", where_str)
-    )
-    .fetch_one(&state.db_pool)
-    .await
-    .map_err(|e| AppError::Internal(e.to_string()))?;
+    query_builder.push(" ORDER BY e.created_at DESC LIMIT ");
+    query_builder.push_bind(page_size);
+    query_builder.push(" OFFSET ");
+    query_builder.push_bind(offset);
 
-    let rows = sqlx::query(
-        &format!(
-            "SELECT e.*, u.nickname AS user_name, r.name AS region_name FROM contest_entry e LEFT JOIN user u ON e.user_id = u.id LEFT JOIN activity a ON e.activity_id = a.id LEFT JOIN region r ON a.region_id = r.id WHERE {} ORDER BY e.created_at DESC LIMIT ? OFFSET ?",
-            where_str
-        )
-    )
-    .bind(page_size)
-    .bind(offset)
-    .fetch_all(&state.db_pool)
-    .await
-    .map_err(|e| AppError::Internal(e.to_string()))?;
+    let total: i64 = count_builder.build_query_scalar::<i64>()
+        .fetch_one(&state.db_pool)
+        .await
+        .map_err(|e| AppError::Internal(e.to_string()))?;
+
+    let rows = query_builder.build()
+        .fetch_all(&state.db_pool)
+        .await
+        .map_err(|e| AppError::Internal(e.to_string()))?;
 
     let list = rows.iter().map(|row| EntryWithUserInfo {
         id: row.get::<i64, _>("id"),
@@ -440,4 +481,69 @@ pub async fn entry_list(
     }).collect();
 
     Ok(Json(EntryListResponse { list, total }))
+}
+
+use crate::db::models::RiskEvent;
+
+#[derive(Deserialize)]
+pub struct RiskEventListQuery {
+    pub activity_id: Option<i64>,
+    pub risk_type: Option<String>,
+    pub risk_level: Option<String>,
+    pub page: Option<i64>,
+    pub page_size: Option<i64>,
+}
+
+#[derive(Serialize)]
+pub struct RiskEventListResponse {
+    pub list: Vec<RiskEvent>,
+    pub total: i64,
+}
+
+pub async fn risk_event_list(
+    State(state): State<AppState>,
+    Query(params): Query<RiskEventListQuery>,
+) -> Result<Json<RiskEventListResponse>, AppError> {
+    let page = params.page.unwrap_or(1).max(1);
+    let page_size = params.page_size.unwrap_or(20).clamp(1, 100);
+    let offset = (page - 1) * page_size;
+
+    let mut query_builder = sqlx::QueryBuilder::<sqlx::Postgres>::new("SELECT * FROM risk_event WHERE 1=1");
+    let mut count_builder = sqlx::QueryBuilder::<sqlx::Postgres>::new("SELECT COUNT(*) FROM risk_event WHERE 1=1");
+
+    if let Some(aid) = params.activity_id {
+        query_builder.push(" AND activity_id = ");
+        query_builder.push_bind(aid);
+        count_builder.push(" AND activity_id = ");
+        count_builder.push_bind(aid);
+    }
+    if let Some(ref rt) = params.risk_type {
+        query_builder.push(" AND risk_type = ");
+        query_builder.push_bind(rt);
+        count_builder.push(" AND risk_type = ");
+        count_builder.push_bind(rt);
+    }
+    if let Some(ref rl) = params.risk_level {
+        query_builder.push(" AND risk_level = ");
+        query_builder.push_bind(rl);
+        count_builder.push(" AND risk_level = ");
+        query_builder.push_bind(rl);
+    }
+
+    query_builder.push(" ORDER BY created_at DESC LIMIT ");
+    query_builder.push_bind(page_size);
+    query_builder.push(" OFFSET ");
+    query_builder.push_bind(offset);
+
+    let total: i64 = count_builder.build_query_scalar::<i64>()
+        .fetch_one(&state.db_pool)
+        .await
+        .map_err(|e| AppError::Internal(e.to_string()))?;
+
+    let list = query_builder.build_query_as::<RiskEvent>()
+        .fetch_all(&state.db_pool)
+        .await
+        .map_err(|e| AppError::Internal(e.to_string()))?;
+
+    Ok(Json(RiskEventListResponse { list, total }))
 }

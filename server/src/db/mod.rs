@@ -1,8 +1,8 @@
-use sqlx::MySqlPool;
-use sqlx::mysql::MySqlPoolOptions;
+use sqlx::PgPool;
+use sqlx::postgres::PgPoolOptions;
 
-pub async fn create_pool(database_url: &str) -> MySqlPool {
-    MySqlPoolOptions::new()
+pub async fn create_pool(database_url: &str) -> PgPool {
+    PgPoolOptions::new()
         .max_connections(10)
         .connect(database_url)
         .await

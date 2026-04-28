@@ -29,7 +29,7 @@ pub async fn get_by_store(
     Path(store_id): Path<i64>,
     Query(params): Query<InventoryQuery>,
 ) -> Result<Json<StoreInventoryResponse>, AppError> {
-    let store_exists = sqlx::query("SELECT id FROM store WHERE id = ?")
+    let store_exists = sqlx::query("SELECT id FROM store WHERE id = $1")
         .bind(store_id)
         .fetch_optional(&state.db_pool)
         .await
@@ -38,9 +38,9 @@ pub async fn get_by_store(
         return Err(AppError::NotFound("Store not found".into()));
     }
 
-    let mut query_str = "SELECT * FROM inventory_item WHERE store_id = ?".to_string();
+    let mut query_str = "SELECT * FROM inventory_item WHERE store_id = $1".to_string();
     if params.category.is_some() {
-        query_str.push_str(" AND category = ?");
+        query_str.push_str(" AND category = $2");
     }
 
     let mut q = sqlx::query_as::<_, InventoryItem>(&query_str).bind(store_id);

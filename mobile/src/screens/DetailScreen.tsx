@@ -7,7 +7,10 @@ import {
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
+  Alert,
+  Share,
 } from 'react-native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import { useVote } from '../hooks/useVote';
 import { VoteButton } from '../components/VoteButton';
 import { RankBadge } from '../components/RankBadge';
@@ -15,44 +18,92 @@ import { RiskTag } from '../components/RiskTag';
 import { colors } from '../theme';
 import { spacing, borderRadius, typography } from '../theme';
 import { formatVoteCount, formatDate } from '../utils/formatters';
-import { getRankList } from '../services/api';
-import { RankedEntry } from '../types/entry';
+import * as api from '../services/api';
 
-interface DetailScreenProps {
-  route?: { params?: { entryId: number } };
-  navigation?: any;
-}
-
-export function DetailScreen({ route, navigation }: DetailScreenProps) {
+export function DetailScreen() {
+  const navigation = useNavigation<any>();
+  const route = useRoute<any>();
   const entryId = route?.params?.entryId ?? 0;
   const { cast, voteRestriction, isLoading: voteLoading, error: voteError } = useVote();
 
+  const [entry, setEntry] = useState<any>(null);
+  const [entryLoading, setEntryLoading] = useState(true);
+  const [myRank, setMyRank] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (entryId) {
+      setEntryLoading(true);
+      api.apiClient.get(`/entries/${entryId}`)
+        .then((res) => {
+          setEntry(res.data?.data ?? res.data);
+        })
+        .catch(() => setEntry(null))
+        .finally(() => setEntryLoading(false));
+    }
+  }, [entryId]);
+
   const handleVote = async () => {
-    const result = await cast(entryId, 0);
+    const result = await cast(entryId, entry?.activity_id ?? 0);
     if (result) {
-      // refresh rank
+      setEntry((prev: any) => prev ? { ...prev, valid_vote_count: prev.valid_vote_count + 1 } : prev);
+      const rankData = await api.getRankList(entry?.activity_id ?? 0, 1, 200);
+      const myEntry = rankData.entries?.find((e: any) => e.id === entryId);
+      if (myEntry) {
+        setEntry((prev: any) => prev ? { ...prev, rank: myEntry.rank, valid_vote_count: myEntry.valid_vote_count } : prev);
+      }
     }
   };
 
-  const handleShare = () => {
-    // Share poster
+  const handleShare = async () => {
+    if (!entry) return;
+    try {
+      await Share.share({
+        title: entry.title || '我的蛋糕设计',
+        message: `快来为我的蛋糕设计投票！作品：${entry.title || '我的蛋糕'}，当前排名 #${entry.rank || '-'}, 得票 ${entry.valid_vote_count || 0}`,
+      });
+    } catch {}
   };
+
+  if (entryLoading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={colors.primary} />
+      </View>
+    );
+  }
+
+  if (!entry) {
+    return (
+      <View style={styles.loadingContainer}>
+        <Text style={styles.errorText}>作品不存在或已删除</Text>
+        <TouchableOpacity onPress={() => navigation.goBack()}>
+          <Text style={styles.backText}>返回</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   return (
     <ScrollView style={styles.container}>
-      <View style={styles.imageSection}>
+      {entry.image_url ? (
+        <Image source={{ uri: entry.image_url }} style={styles.entryImage} resizeMode="cover" />
+      ) : (
         <View style={styles.imagePlaceholder}>
           <Text style={styles.imagePlaceholderText}>蛋糕设计大图</Text>
         </View>
-      </View>
+      )}
 
       <View style={styles.infoSection}>
         <View style={styles.titleRow}>
-          <Text style={styles.title}>作品标题</Text>
-          <RankBadge rank={1} />
+          <Text style={styles.title}>{entry.title || `作品 #${entry.id}`}</Text>
+          {entry.rank && <RankBadge rank={entry.rank} />}
         </View>
-        <Text style={styles.voteCount}>{formatVoteCount(0)} 有效票</Text>
-        <Text style={styles.time}>参赛时间: {formatDate(new Date().toISOString())}</Text>
+        <View style={styles.metaRow}>
+          <Text style={styles.voteCount}>{formatVoteCount(entry.valid_vote_count ?? 0)} 有效票</Text>
+          {entry.ai_generated && <RiskTag level="medium" label="AI生成" />}
+        </View>
+        <Text style={styles.time}>参赛时间: {formatDate(entry.created_at)}</Text>
+        {entry.user_name && <Text style={styles.author}>作者: {entry.user_name}</Text>}
       </View>
 
       {voteError && <Text style={styles.errorText}>{voteError}</Text>}
@@ -68,6 +119,15 @@ export function DetailScreen({ route, navigation }: DetailScreenProps) {
       <TouchableOpacity style={styles.shareButton} onPress={handleShare}>
         <Text style={styles.shareButtonText}>分享拉票</Text>
       </TouchableOpacity>
+
+      {entry.is_winner && (
+        <View style={styles.winnerBanner}>
+          <Text style={styles.winnerText}>恭喜获奖！请前往领奖页面查看核销码</Text>
+          <TouchableOpacity onPress={() => navigation.navigate('Redeem')}>
+            <Text style={styles.winnerLink}>查看领奖码</Text>
+          </TouchableOpacity>
+        </View>
+      )}
     </ScrollView>
   );
 }
@@ -77,19 +137,26 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
-  imageSection: {
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: colors.background,
+  },
+  entryImage: {
+    width: '100%',
     height: 300,
-    overflow: 'hidden',
+    resizeMode: 'cover',
   },
   imagePlaceholder: {
-    flex: 1,
-    backgroundColor: colors.primary,
+    height: 300,
+    backgroundColor: colors.primary + '20',
     justifyContent: 'center',
     alignItems: 'center',
   },
   imagePlaceholderText: {
     ...typography.title,
-    color: colors.textPrimary,
+    color: colors.textHint,
   },
   infoSection: {
     padding: spacing.xl,
@@ -105,14 +172,24 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
     flex: 1,
   },
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: spacing.sm,
+    gap: spacing.md,
+  },
   voteCount: {
     ...typography.body,
     color: colors.textSecondary,
-    marginTop: spacing.sm,
   },
   time: {
     ...typography.caption,
     color: colors.textHint,
+    marginTop: spacing.xs,
+  },
+  author: {
+    ...typography.caption,
+    color: colors.textSecondary,
     marginTop: spacing.xs,
   },
   errorText: {
@@ -132,5 +209,29 @@ const styles = StyleSheet.create({
   shareButtonText: {
     ...typography.button,
     color: colors.surface,
+  },
+  winnerBanner: {
+    backgroundColor: colors.freeTag + '20',
+    borderRadius: borderRadius.lg,
+    padding: spacing.xl,
+    marginHorizontal: spacing.xl,
+    marginTop: spacing.md,
+    marginBottom: spacing.xxl,
+    alignItems: 'center',
+  },
+  winnerText: {
+    ...typography.body,
+    color: colors.freeTag,
+    textAlign: 'center',
+  },
+  winnerLink: {
+    ...typography.button,
+    color: colors.primary,
+    marginTop: spacing.sm,
+  },
+  backText: {
+    ...typography.body,
+    color: colors.primary,
+    marginTop: spacing.md,
   },
 });

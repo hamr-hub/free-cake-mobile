@@ -1,6 +1,7 @@
 import React from "react";
 import { useCustom, useList } from "@refinedev/core";
 import { Row, Col, Card, Statistic, Table, Tag, Spin } from "antd";
+import ReactECharts from "echarts-for-react";
 import {
   EnvironmentOutlined,
   PictureOutlined,
@@ -70,6 +71,60 @@ export const DashboardPage: React.FC = () => {
     finished: "red",
   };
 
+  const gaugeOption = {
+    series: [{
+      type: "gauge",
+      startAngle: 200,
+      endAngle: -20,
+      min: 0,
+      max: 100,
+      progress: { show: true, width: 12 },
+      itemStyle: { color: "#1677ff" },
+      pointer: { show: false },
+      axisLine: { lineStyle: { width: 12, color: [[1, "#e5e5e5"]] } },
+      axisTick: { show: false },
+      splitLine: { show: false },
+      axisLabel: { show: false },
+      detail: {
+        valueAnimation: true,
+        fontSize: 28,
+        offsetCenter: [0, "0%"],
+        formatter: `{value}%`,
+      },
+      data: [{ value: stats.today_redeem_rate }],
+    }],
+  };
+
+  const riskPieOption = {
+    tooltip: { trigger: "item" },
+    series: [{
+      type: "pie",
+      radius: ["40%", "70%"],
+      avoidLabelOverlap: false,
+      label: { show: true, formatter: "{b}: {d}%" },
+      data: [
+        { value: 100 - stats.risk_vote_ratio, name: "正常票", itemStyle: { color: "#52c41a" } },
+        { value: stats.risk_vote_ratio, name: "风险票", itemStyle: { color: "#ff4d4f" } },
+      ],
+    }],
+  };
+
+  const barOption = {
+    tooltip: { trigger: "axis" },
+    xAxis: { type: "category", data: ["参赛", "投票", "待排产", "低库存门店"] },
+    yAxis: { type: "value" },
+    series: [{
+      type: "bar",
+      data: [
+        { value: stats.today_entries, itemStyle: { color: "#52c41a" } },
+        { value: stats.today_votes, itemStyle: { color: "#722ed1" } },
+        { value: stats.pending_production, itemStyle: { color: "#eb2f96" } },
+        { value: stats.low_inventory_stores, itemStyle: { color: "#ff4d4f" } },
+      ],
+      barWidth: 36,
+    }],
+  };
+
   return (
     <Spin spinning={statsLoading}>
       <Row gutter={[16, 16]}>
@@ -80,6 +135,23 @@ export const DashboardPage: React.FC = () => {
             </Card>
           </Col>
         ))}
+      </Row>
+      <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
+        <Col span={8}>
+          <Card title="核销率仪表盘" style={cardStyle}>
+            <ReactECharts option={gaugeOption} style={{ height: 220 }} />
+          </Card>
+        </Col>
+        <Col span={8}>
+          <Card title="投票风险分布" style={cardStyle}>
+            <ReactECharts option={riskPieOption} style={{ height: 220 }} />
+          </Card>
+        </Col>
+        <Col span={8}>
+          <Card title="今日数据概览" style={cardStyle}>
+            <ReactECharts option={barOption} style={{ height: 220 }} />
+          </Card>
+        </Col>
       </Row>
       <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
         <Col span={24}>

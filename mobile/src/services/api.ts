@@ -103,4 +103,14 @@ export async function getDashboardStats() {
   return response.data;
 }
 
-export default apiClient;
+export async function getEntryDetail(entryId: number) {
+  const response = await apiClient.get(`/entries/${entryId}`);
+  return response.data;
+}
+
+export async function getRiskEvents(limit: number = 50) {
+  const response = await apiClient.get('/risk-events', { params: { limit } });
+  return response.data;
+}
+
+export { apiClient };

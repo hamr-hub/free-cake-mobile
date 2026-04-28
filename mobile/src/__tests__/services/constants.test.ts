@@ -1,4 +1,4 @@
-import { MAX_VOTES_PER_DAY, AI_GENERATE_RATE_LIMIT, REGION_RADIUS_KM, SCENES, STYLES, COLOR_PREFERENCES, ACTIVITY_STATUS, VOTE_STATUS, REDEEM_STATUS } from '../utils/constants';
+import { MAX_VOTES_PER_DAY, AI_GENERATE_RATE_LIMIT, REGION_RADIUS_KM, SCENES, STYLES, COLOR_PREFERENCES, ACTIVITY_STATUS, VOTE_STATUS, REDEEM_STATUS } from '../../utils/constants';
 
 describe('constants', () => {
   it('should have correct vote limit', () => {

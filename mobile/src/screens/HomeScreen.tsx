@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, RefreshControl } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, RefreshControl, Image } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../context/AuthContext';
 import { useActivity } from '../hooks/useActivity';
 import { useNetwork } from '../hooks/useNetwork';
@@ -8,12 +9,16 @@ import { CountdownBanner } from '../components/CountdownBanner';
 import { CakeCard } from '../components/CakeCard';
 import { colors } from '../theme';
 import { spacing, borderRadius, typography } from '../theme';
-import { formatCountdown } from '../utils/formatters';
+import * as api from '../services/api';
+import { RankedEntry } from '../types/entry';
 
 export function HomeScreen() {
   const { regionId } = useAuth();
   const { currentActivity, isLoading, fetchCurrentActivity, fetchActivities, activities } = useActivity();
   const { isOffline } = useNetwork();
+  const navigation = useNavigation<any>();
+  const [hotEntries, setHotEntries] = React.useState<RankedEntry[]>([]);
+  const [hotLoading, setHotLoading] = React.useState(false);
 
   useEffect(() => {
     if (regionId) {
@@ -22,12 +27,26 @@ export function HomeScreen() {
     }
   }, [regionId]);
 
+  useEffect(() => {
+    if (currentActivity?.id) {
+      setHotLoading(true);
+      api.getRankList(currentActivity.id, 1, 6)
+        .then((data) => {
+          setHotEntries(data.entries ?? []);
+        })
+        .catch(() => setHotEntries([]))
+        .finally(() => setHotLoading(false));
+    }
+  }, [currentActivity?.id]);
+
   const handleGenerate = () => {
     if (currentActivity) {
-      // @ts-ignore - navigation will be injected by React Navigation
-      const navigation = globalThis.__navigation;
-      navigation?.navigate('Generate', { activityId: currentActivity.id });
+      navigation.navigate('Generate', { activityId: currentActivity.id });
     }
+  };
+
+  const handleEntryPress = (entryId: number) => {
+    navigation.navigate('Detail', { entryId });
   };
 
   return (
@@ -42,6 +61,10 @@ export function HomeScreen() {
           <View style={styles.offlineBanner}>
             <Text style={styles.offlineText}>网络不可用，部分功能可能受限</Text>
           </View>
+        )}
+
+        {currentActivity?.banner_url && (
+          <Image source={{ uri: currentActivity.banner_url }} style={styles.bannerImage} resizeMode="cover" />
         )}
 
         {currentActivity && (
@@ -63,20 +86,23 @@ export function HomeScreen() {
           <Text style={styles.infoDescription}>
             AI 设计 → 参赛投票 → Top100 获奖 → 到店核销领取
           </Text>
+          <Text style={styles.infoDetail}>
+            投票仅限本赛区用户，每日可投{currentActivity?.rules?.max_votes_per_day ?? 3}票
+          </Text>
         </View>
 
-        {currentActivity && (
+        {hotEntries.length > 0 && (
           <View style={styles.hotSection}>
             <Text style={styles.sectionTitle}>热门作品</Text>
             <View style={styles.hotList}>
-              {activities.slice(0, 6).map((_, index) => (
+              {hotEntries.map((entry) => (
                 <CakeCard
-                  key={index}
-                  title={`作品 #${index + 1}`}
-                  imageUrl=""
-                  voteCount={0}
-                  rank={index + 1}
-                  onPress={() => {}}
+                  key={entry.id}
+                  title={entry.title}
+                  imageUrl={entry.image_url}
+                  voteCount={entry.valid_vote_count}
+                  rank={entry.rank}
+                  onPress={() => handleEntryPress(entry.id)}
                 />
               ))}
             </View>
@@ -85,10 +111,11 @@ export function HomeScreen() {
 
         <View style={styles.rulesSection}>
           <Text style={styles.sectionTitle}>活动规则</Text>
-          <Text style={styles.ruleText}>参与范围：活动赛区 10km 内</Text>
-          <Text style={styles.ruleText}>投票限制：每人每天 3 票</Text>
-          <Text style={styles.ruleText}>奖品：6寸动物奶油免费蛋糕</Text>
+          <Text style={styles.ruleText}>参与范围：活动赛区 {currentActivity?.rules?.region_radius_km ?? 10}km 内</Text>
+          <Text style={styles.ruleText}>投票限制：每人每天 {currentActivity?.rules?.max_votes_per_day ?? 3} 票</Text>
+          <Text style={styles.ruleText}>奖品：{currentActivity?.rules?.free_cake_size ?? '6寸'} {currentActivity?.rules?.cream_type ?? '动物奶油'}免费蛋糕</Text>
           <Text style={styles.ruleText}>领取：到店扫码核销自提</Text>
+          <Text style={styles.ruleText}>AI生成：每小时限 {currentActivity?.rules?.ai_generation_rate_limit ?? 5} 次</Text>
         </View>
       </ScrollView>
     </RegionGuard>
@@ -108,6 +135,11 @@ const styles = StyleSheet.create({
   offlineText: {
     color: colors.textPrimary,
     fontSize: 13,
+  },
+  bannerImage: {
+    width: '100%',
+    height: 160,
+    resizeMode: 'cover',
   },
   ctaSection: {
     padding: spacing.xl,
@@ -137,6 +169,12 @@ const styles = StyleSheet.create({
     ...typography.caption,
     color: colors.textSecondary,
     textAlign: 'center',
+  },
+  infoDetail: {
+    ...typography.caption,
+    color: colors.textHint,
+    textAlign: 'center',
+    marginTop: spacing.sm,
   },
   hotSection: {
     padding: spacing.xl,

@@ -15,6 +15,7 @@ pub struct CastVoteRequest {
     pub voter_device_id: Option<String>,
     pub voter_ip: Option<String>,
     pub geohash: Option<String>,
+    pub voter_openid: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -42,7 +43,7 @@ pub async fn cast(
     Path(entry_id): Path<i64>,
     Json(req): Json<CastVoteRequest>,
 ) -> Result<Json<CastVoteResponse>, AppError> {
-    let activity = sqlx::query("SELECT status FROM activity WHERE id = ?")
+    let activity = sqlx::query("SELECT status FROM activity WHERE id = $1")
         .bind(req.activity_id)
         .fetch_optional(&state.db_pool)
         .await
@@ -53,7 +54,7 @@ pub async fn cast(
         return Err(AppError::BadRequest("Activity is not in voting phase".into()));
     }
 
-    let entry = sqlx::query("SELECT id, activity_id FROM contest_entry WHERE id = ? AND status = 'active'")
+    let entry = sqlx::query("SELECT id, activity_id FROM contest_entry WHERE id = $1 AND status = 'active'")
         .bind(entry_id)
         .fetch_optional(&state.db_pool)
         .await
@@ -87,17 +88,19 @@ pub async fn cast(
     let device_id = req.voter_device_id.as_deref().unwrap_or("");
     let ip = req.voter_ip.as_deref().unwrap_or("");
     let geohash = req.geohash.as_deref().unwrap_or("");
+    let openid = req.voter_openid.as_deref().unwrap_or("");
 
     let (is_risky, risk_tags) = RiskControlService::check_vote_risk(
         &state.db_pool,
-        phone_hash, device_id, ip, geohash, req.activity_id,
+        state.config.risk_control_enabled,
+        phone_hash, device_id, ip, geohash, openid, req.activity_id,
     ).await?;
 
     let vote_status = if is_risky { "frozen" } else { "valid" };
     let risk_tags_str = serde_json::to_string(&risk_tags).unwrap_or_default();
 
-    let result = sqlx::query(
-        "INSERT INTO vote_record (activity_id, entry_id, voter_user_id, voter_phone_hash, voter_device_id, ip, geohash, vote_status, risk_tags) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+    let row = sqlx::query(
+        "INSERT INTO vote_record (activity_id, entry_id, voter_user_id, voter_phone_hash, voter_device_id, ip, geohash, vote_status, risk_tags) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id"
     )
     .bind(req.activity_id)
     .bind(entry_id)
@@ -108,18 +111,18 @@ pub async fn cast(
     .bind(geohash)
     .bind(vote_status)
     .bind(&risk_tags_str)
-    .execute(&state.db_pool)
+    .fetch_one(&state.db_pool)
     .await
     .map_err(|e| AppError::Internal(e.to_string()))?;
 
     if vote_status == "valid" {
-        sqlx::query("UPDATE contest_entry SET raw_vote_count = raw_vote_count + 1, valid_vote_count = valid_vote_count + 1 WHERE id = ?")
+        sqlx::query("UPDATE contest_entry SET raw_vote_count = raw_vote_count + 1, valid_vote_count = valid_vote_count + 1 WHERE id = $1")
             .bind(entry_id)
             .execute(&state.db_pool)
             .await
             .map_err(|e| AppError::Internal(e.to_string()))?;
 
-        let entry_row = sqlx::query("SELECT valid_vote_count FROM contest_entry WHERE id = ?")
+        let entry_row = sqlx::query("SELECT valid_vote_count FROM contest_entry WHERE id = $1")
             .bind(entry_id)
             .fetch_one(&state.db_pool)
             .await
@@ -128,7 +131,7 @@ pub async fn cast(
 
         RankCacheService::update_rank_with_redis(&state.redis_client, req.activity_id, entry_id, valid_count).await?;
     } else {
-        sqlx::query("UPDATE contest_entry SET raw_vote_count = raw_vote_count + 1 WHERE id = ?")
+        sqlx::query("UPDATE contest_entry SET raw_vote_count = raw_vote_count + 1 WHERE id = $1")
             .bind(entry_id)
             .execute(&state.db_pool)
             .await
@@ -138,7 +141,7 @@ pub async fn cast(
     let remaining = max_votes - count;
 
     Ok(Json(CastVoteResponse {
-        vote_id: result.last_insert_id() as i64,
+        vote_id: row.get::<i64, _>("id"),
         vote_status: vote_status.to_string(),
         remaining_votes: remaining as i32,
     }))
@@ -153,16 +156,31 @@ pub async fn rank(
     let page_size = params.page_size.unwrap_or(20);
     let offset = (page - 1) * page_size;
 
+    let cache_result = RankCacheService::get_rank(&state.redis_client, activity_id).await;
     let total = sqlx::query_scalar::<_, i64>(
-        "SELECT COUNT(*) FROM contest_entry WHERE activity_id = ? AND status = 'active'"
+        "SELECT COUNT(*) FROM contest_entry WHERE activity_id = $1 AND status = 'active'"
     )
     .bind(activity_id)
     .fetch_one(&state.db_pool)
     .await
     .map_err(|e| AppError::Internal(e.to_string()))?;
 
+    if let Ok(cached_ids) = cache_result {
+        if !cached_ids.is_empty() && page == 1 && page_size >= cached_ids.len() as i64 {
+            // Use parameterized query instead of string interpolation
+            let entries: Vec<ContestEntry> = sqlx::query_as(
+                "SELECT * FROM contest_entry WHERE id = ANY($1) AND status = 'active' ORDER BY valid_vote_count DESC"
+            )
+            .bind(cached_ids.iter().map(|(id, _)| *id).collect::<Vec<i64>>())
+            .fetch_all(&state.db_pool)
+            .await
+            .map_err(|e| AppError::Internal(e.to_string()))?;
+            return Ok(Json(RankResponse { entries, total }));
+        }
+    }
+
     let entries = sqlx::query_as::<_, ContestEntry>(
-        "SELECT * FROM contest_entry WHERE activity_id = ? AND status = 'active' ORDER BY valid_vote_count DESC LIMIT ? OFFSET ?"
+        "SELECT * FROM contest_entry WHERE activity_id = $1 AND status = 'active' ORDER BY valid_vote_count DESC LIMIT $2 OFFSET $3"
     )
     .bind(activity_id)
     .bind(page_size)

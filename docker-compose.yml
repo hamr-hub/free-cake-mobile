@@ -1,0 +1,82 @@
+services:
+  server:
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+    container_name: free-cake-server
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env.docker
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - free-cake-net
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3000/api/auth/login || exit 0"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  client:
+    build:
+      context: .
+      dockerfile: client/Dockerfile
+    container_name: free-cake-client
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      - server
+    networks:
+      - free-cake-net
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: free-cake-postgres
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-free_cake_pwd}
+      POSTGRES_DB: ${POSTGRES_DB:-free_cake}
+      POSTGRES_USER: ${POSTGRES_USER:-free_cake}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./server/src/db/migrations:/docker-entrypoint-initdb.d
+    networks:
+      - free-cake-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-free_cake} -d ${POSTGRES_DB:-free_cake}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: free-cake-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - free-cake-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+networks:
+  free-cake-net:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:

@@ -1,0 +1,12 @@
+server/
+mobile/
+docs/
+.github/
+*.md
+.env
+.env.docker
+deploy.sh
+dev.sh
+docker-compose.yml
+.git
+LICENSE

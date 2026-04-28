@@ -44,7 +44,7 @@ pub async fn verify(
         return Err(AppError::Conflict("Redeem code is being processed, please retry".into()));
     }
 
-    let code_row = sqlx::query("SELECT id, order_id, code, expires_at, status FROM redeem_code WHERE code = ?")
+    let code_row = sqlx::query("SELECT id, order_id, code, expires_at, status FROM redeem_code WHERE code = $1")
         .bind(&req.redeem_code)
         .fetch_optional(&state.db_pool)
         .await
@@ -63,7 +63,7 @@ pub async fn verify(
             let expires_at: chrono::NaiveDateTime = row.get("expires_at");
 
             if code_status == "used" {
-                let existing_record = sqlx::query("SELECT order_id FROM redeem_record WHERE redeem_code_id = ?")
+                let existing_record = sqlx::query("SELECT order_id FROM redeem_record WHERE redeem_code_id = $1")
                     .bind(code_id)
                     .fetch_optional(&state.db_pool)
                     .await
@@ -81,20 +81,20 @@ pub async fn verify(
                     fail_reason: Some("Redeem code has expired".into()),
                 }
             } else {
-                sqlx::query("UPDATE redeem_code SET status = 'used' WHERE id = ?")
+                sqlx::query("UPDATE redeem_code SET status = 'used' WHERE id = $1")
                     .bind(code_id)
                     .execute(&state.db_pool)
                     .await
                     .map_err(|e| AppError::Internal(e.to_string()))?;
 
-                sqlx::query("UPDATE reward_order SET redeem_status = 'redeemed' WHERE id = ?")
+                sqlx::query("UPDATE reward_order SET redeem_status = 'redeemed' WHERE id = $1")
                     .bind(order_id)
                     .execute(&state.db_pool)
                     .await
                     .map_err(|e| AppError::Internal(e.to_string()))?;
 
                 sqlx::query(
-                    "INSERT INTO redeem_record (order_id, redeem_code_id, store_id, verifier_staff_id, redeem_result) VALUES (?, ?, ?, 0, 'success')"
+                    "INSERT INTO redeem_record (order_id, redeem_code_id, store_id, verifier_staff_id, redeem_result) VALUES ($1, $2, $3, 0, 'success')"
                 )
                 .bind(order_id)
                 .bind(code_id)

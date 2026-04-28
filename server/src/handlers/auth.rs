@@ -65,7 +65,7 @@ pub async fn login(
         return Err(AppError::RateLimited("Too many login attempts".into()));
     }
 
-    let user = sqlx::query("SELECT id, role FROM user WHERE phone = ?")
+    let user = sqlx::query("SELECT id, role FROM app_user WHERE phone = $1")
         .bind(&req.phone)
         .fetch_optional(&state.db_pool)
         .await
@@ -74,16 +74,16 @@ pub async fn login(
     let (user_id, role) = match user {
         Some(row) => (row.get::<i64, _>("id"), row.get::<String, _>("role")),
         None => {
-            let phone_hash = format!("{:x}", md5_hash(&req.phone));
-            let result = sqlx::query(
-                "INSERT INTO user (phone, phone_hash, role) VALUES (?, ?, 'user')"
+            let phone_hash = sha256_hex(&req.phone);
+            let row = sqlx::query(
+                "INSERT INTO app_user (phone, phone_hash, role) VALUES ($1, $2, 'user') RETURNING id"
             )
             .bind(&req.phone)
             .bind(&phone_hash)
-            .execute(&state.db_pool)
+            .fetch_one(&state.db_pool)
             .await
             .map_err(|e| AppError::Internal(e.to_string()))?;
-            (result.last_insert_id() as i64, "user".to_string())
+            (row.get::<i64, _>("id"), "user".to_string())
         }
     };
 
@@ -98,10 +98,8 @@ pub async fn login(
     Ok(Json(LoginResponse { token, user_id, role }))
 }
 
-fn md5_hash(s: &str) -> u128 {
-    use std::collections::hash_map::DefaultHasher;
-    use std::hash::{Hash, Hasher};
-    let mut hasher = DefaultHasher::new();
-    s.hash(&mut hasher);
-    hasher.finish() as u128
+fn sha256_hex(s: &str) -> String {
+    use sha2::{Sha256, Digest};
+    let hash = Sha256::digest(s.as_bytes());
+    format!("{:x}", hash)
 }

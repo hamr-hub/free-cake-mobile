@@ -38,3 +38,25 @@ export type VoteStatus = typeof VOTE_STATUS[number];
 
 export const REDEEM_STATUS = ['unused', 'used', 'expired'] as const;
 export type RedeemStatus = typeof REDEEM_STATUS[number];
+
+function toRad(deg: number): number {
+  return deg * Math.PI / 180;
+}
+
+export function isInRange(
+  lat1: number,
+  lng1: number,
+  lat2: number,
+  lng2: number,
+  radiusKm: number
+): boolean {
+  const R = 6371;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+    Math.sin(dLng / 2) * Math.sin(dLng / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  const d = R * c;
+  return d <= radiusKm;
+}

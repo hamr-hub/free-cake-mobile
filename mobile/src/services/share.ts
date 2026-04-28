@@ -27,11 +27,10 @@ export async function captureAndShare(viewRef: RefObject<any>, message: string =
 
 export async function shareToWechat(url: string, title: string, description: string): Promise<boolean> {
   try {
-    await Share.shareSingle({
+    await Share.open({
       url,
       message: description,
       title,
-      social: Share.Social.WECHAT,
     });
     return true;
   } catch {

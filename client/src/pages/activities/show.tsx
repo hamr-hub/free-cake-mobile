@@ -1,10 +1,11 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useShow, useNotification } from "@refinedev/core";
 import { Show } from "@refinedev/antd";
-import { Descriptions, Tag, Button, Popconfirm, Space, Row, Col, Spin } from "antd";
+import { Descriptions, Tag, Button, Popconfirm, Space, Row, Col, Spin, Tabs, Table, Card, Statistic } from "antd";
 import { PlayCircleOutlined, ThunderboltOutlined } from "@ant-design/icons";
 import { CountdownBanner } from "../../components/CountdownBanner";
 import { AuditDrawer } from "../../components/AuditDrawer";
+import { EntryCard } from "../../components/EntryCard";
 
 const statusColorMap: Record<string, string> = {
   draft: "default",
@@ -35,12 +36,60 @@ const nextStatusMap: Record<string, { status: string; label: string }> = {
   redeeming: { status: "finished", label: "结束活动" },
 };
 
+const entryStatusColor: Record<string, string> = {
+  pending: "orange",
+  approved: "green",
+  rejected: "red",
+  active: "green",
+  frozen: "blue",
+};
+
 export const ActivityShow: React.FC = () => {
   const { query } = useShow({ resource: "activities" });
   const record = query.data?.data;
   const isLoading = query.isLoading;
   const { open } = useNotification();
   const [auditVisible, setAuditVisible] = useState(false);
+  const [entries, setEntries] = useState<any[]>([]);
+  const [entriesLoading, setEntriesLoading] = useState(false);
+  const [voteStats, setVoteStats] = useState<any>(null);
+  const [voteStatsLoading, setVoteStatsLoading] = useState(false);
+  const [rankList, setRankList] = useState<any[]>([]);
+  const [rankLoading, setRankLoading] = useState(false);
+
+  useEffect(() => {
+    if (!record?.id) return;
+    setEntriesLoading(true);
+    fetch(`/api/entries?activity_id=${record.id}&limit=100`, {
+      headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        setEntries(Array.isArray(data?.data) ? data.data : Array.isArray(data) ? data : []);
+      })
+      .catch(() => setEntries([]))
+      .finally(() => setEntriesLoading(false));
+
+    setVoteStatsLoading(true);
+    fetch(`/api/activities/${record.id}/vote-stats`, {
+      headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+    })
+      .then((res) => res.json())
+      .then((data) => setVoteStats(data))
+      .catch(() => setVoteStats(null))
+      .finally(() => setVoteStatsLoading(false));
+
+    setRankLoading(true);
+    fetch(`/api/activities/${record.id}/rank`, {
+      headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        setRankList(Array.isArray(data?.data) ? data.data : Array.isArray(data) ? data : []);
+      })
+      .catch(() => setRankList([]))
+      .finally(() => setRankLoading(false));
+  }, [record?.id]);
 
   const handleStatusTransition = async (newStatus: string) => {
     try {
@@ -78,54 +127,161 @@ export const ActivityShow: React.FC = () => {
     }
   };
 
+  const handleEntryStatus = async (entryId: number, newStatus: string) => {
+    try {
+      await fetch(`/api/entries/${entryId}/status`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+        },
+        body: JSON.stringify({ new_status: newStatus }),
+      });
+      open?.({ type: "success", message: "作品状态更新成功" });
+      setEntries((prev) =>
+        prev.map((e) => e.id === entryId ? { ...e, status: newStatus } : e)
+      );
+    } catch (e: any) {
+      open?.({ type: "error", message: "操作失败", description: e.message });
+    }
+  };
+
   const next = record?.status ? nextStatusMap[record.status] : null;
+
+  const tabItems = [
+    {
+      key: "info",
+      label: "活动信息",
+      children: (
+        <>
+          <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
+            {record?.voting_end_at && record.status === "voting_open" && (
+              <Col span={24}>
+                <CountdownBanner targetTime={record.voting_end_at} label="投票截止" />
+              </Col>
+            )}
+            {record?.registration_end_at && record.status === "registration_open" && (
+              <Col span={24}>
+                <CountdownBanner targetTime={record.registration_end_at} label="报名截止" />
+              </Col>
+            )}
+          </Row>
+
+          <Descriptions column={2} bordered>
+            <Descriptions.Item label="ID">{record?.id}</Descriptions.Item>
+            <Descriptions.Item label="活动名称">{record?.name}</Descriptions.Item>
+            <Descriptions.Item label="状态">
+              <Tag color={statusColorMap[record?.status] || "default"}>
+                {statusLabelMap[record?.status] || record?.status}
+              </Tag>
+            </Descriptions.Item>
+            <Descriptions.Item label="赛区ID">{record?.region_id}</Descriptions.Item>
+            <Descriptions.Item label="报名开始">{record?.registration_start_at}</Descriptions.Item>
+            <Descriptions.Item label="报名截止">{record?.registration_end_at}</Descriptions.Item>
+            <Descriptions.Item label="投票开始">{record?.voting_start_at}</Descriptions.Item>
+            <Descriptions.Item label="投票截止">{record?.voting_end_at}</Descriptions.Item>
+            <Descriptions.Item label="获奖人数上限">{record?.max_winner_count}</Descriptions.Item>
+            <Descriptions.Item label="创建时间">{record?.created_at}</Descriptions.Item>
+          </Descriptions>
+
+          <Space style={{ marginTop: 16 }}>
+            {next && (
+              <Popconfirm title={`确认切换到「${next.label}」？`} onConfirm={() => handleStatusTransition(next.status)}>
+                <Button type="primary" icon={<PlayCircleOutlined />}>{next.label}</Button>
+              </Popconfirm>
+            )}
+            {record?.status === "voting_closed" && (
+              <Popconfirm title="确认执行结算？将生成 Top100 获奖名单和核销码" onConfirm={handleSettle}>
+                <Button type="primary" danger icon={<ThunderboltOutlined />}>执行结算</Button>
+              </Popconfirm>
+            )}
+            <Button onClick={() => setAuditVisible(true)}>查看审计日志</Button>
+          </Space>
+        </>
+      ),
+    },
+    {
+      key: "entries",
+      label: `作品列表 (${entries.length})`,
+      children: (
+        <Spin spinning={entriesLoading}>
+          <Row gutter={[12, 12]}>
+            {entries.map((entry) => (
+              <Col key={entry.id} xs={24} sm={12} md={8} lg={6}>
+                <EntryCard
+                  id={entry.id}
+                  imageUrl={entry.image_url || entry.photo_url || ""}
+                  title={entry.title || entry.name}
+                  userName={entry.user_name || entry.submitter_name}
+                  voteCount={entry.vote_count}
+                  rank={entry.rank}
+                  status={entry.status}
+                  aiGenerated={entry.ai_generated || false}
+                  onClick={(id) => {
+                    if (entry.status === "pending") {
+                      handleEntryStatus(id, "approved");
+                    }
+                  }}
+                />
+              </Col>
+            ))}
+            {entries.length === 0 && !entriesLoading && (
+              <Col span={24} style={{ textAlign: "center", padding: 40, color: "#999" }}>
+                暂无参赛作品
+              </Col>
+            )}
+          </Row>
+        </Spin>
+      ),
+    },
+    {
+      key: "votes",
+      label: "投票数据",
+      children: (
+        <Spin spinning={voteStatsLoading || rankLoading}>
+          {voteStats && (
+            <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
+              <Col span={6}>
+                <Card><Statistic title="总投票数" value={voteStats.total_votes || 0} /></Card>
+              </Col>
+              <Col span={6}>
+                <Card><Statistic title="有效票数" value={voteStats.valid_votes || 0} /></Card>
+              </Col>
+              <Col span={6}>
+                <Card><Statistic title="参与人数" value={voteStats.unique_voters || 0} /></Card>
+              </Col>
+              <Col span={6}>
+                <Card><Statistic title="风险票占比" value={voteStats.risk_ratio || 0} precision={2} suffix="%" /></Card>
+              </Col>
+            </Row>
+          )}
+          <Table
+            dataSource={rankList}
+            rowKey="id"
+            loading={rankLoading}
+            pagination={{ pageSize: 20 }}
+            size="small"
+          >
+            <Table.Column dataIndex="rank" title="排名" width={60} render={(v: number) => (
+              v <= 3 ? <Tag color="gold">{v}</Tag> : v
+            )} />
+            <Table.Column dataIndex="entry_id" title="作品ID" width={80} />
+            <Table.Column dataIndex="title" title="作品名称" ellipsis />
+            <Table.Column dataIndex="vote_count" title="得票数" width={100} sorter={(a: any, b: any) => a.vote_count - b.vote_count} />
+            <Table.Column dataIndex="user_name" title="作者" width={120} />
+            <Table.Column dataIndex="status" title="状态" width={80} render={(v: string) => (
+              <Tag color={entryStatusColor[v] || "default"}>{v}</Tag>
+            )} />
+          </Table>
+        </Spin>
+      ),
+    },
+  ];
 
   return (
     <Spin spinning={isLoading}>
       <Show isLoading={isLoading}>
-        <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
-          {record?.voting_end_at && record.status === "voting_open" && (
-            <Col span={24}>
-              <CountdownBanner targetTime={record.voting_end_at} label="投票截止" />
-            </Col>
-          )}
-          {record?.registration_end_at && record.status === "registration_open" && (
-            <Col span={24}>
-              <CountdownBanner targetTime={record.registration_end_at} label="报名截止" />
-            </Col>
-          )}
-        </Row>
-
-        <Descriptions column={2} bordered>
-          <Descriptions.Item label="ID">{record?.id}</Descriptions.Item>
-          <Descriptions.Item label="活动名称">{record?.name}</Descriptions.Item>
-          <Descriptions.Item label="状态">
-            <Tag color={statusColorMap[record?.status] || "default"}>
-              {statusLabelMap[record?.status] || record?.status}
-            </Tag>
-          </Descriptions.Item>
-          <Descriptions.Item label="赛区ID">{record?.region_id}</Descriptions.Item>
-          <Descriptions.Item label="报名开始">{record?.registration_start_at}</Descriptions.Item>
-          <Descriptions.Item label="报名截止">{record?.registration_end_at}</Descriptions.Item>
-          <Descriptions.Item label="投票开始">{record?.voting_start_at}</Descriptions.Item>
-          <Descriptions.Item label="投票截止">{record?.voting_end_at}</Descriptions.Item>
-          <Descriptions.Item label="获奖人数上限">{record?.max_winner_count}</Descriptions.Item>
-          <Descriptions.Item label="创建时间">{record?.created_at}</Descriptions.Item>
-        </Descriptions>
-
-        <Space style={{ marginTop: 16 }}>
-          {next && (
-            <Popconfirm title={`确认切换到「${next.label}」？`} onConfirm={() => handleStatusTransition(next.status)}>
-              <Button type="primary" icon={<PlayCircleOutlined />}>{next.label}</Button>
-            </Popconfirm>
-          )}
-          {record?.status === "voting_closed" && (
-            <Popconfirm title="确认执行结算？将生成 Top100 获奖名单和核销码" onConfirm={handleSettle}>
-              <Button type="primary" danger icon={<ThunderboltOutlined />}>执行结算</Button>
-            </Popconfirm>
-          )}
-          <Button onClick={() => setAuditVisible(true)}>查看审计日志</Button>
-        </Space>
+        <Tabs items={tabItems} defaultActiveKey="info" />
       </Show>
 
       <AuditDrawer targetType="activity" targetId={Number(record?.id) || 0} visible={auditVisible} onClose={() => setAuditVisible(false)} />

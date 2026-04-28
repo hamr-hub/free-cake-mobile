@@ -11,12 +11,13 @@ pub struct AppConfig {
     pub ai_generation_rate_limit: i32,
     pub enable_auto_settle: bool,
     pub risk_control_enabled: bool,
+    pub cors_origin: String,
 }
 
 impl AppConfig {
     pub fn from_env() -> Self {
         Self {
-            database_url: dotenvy::var("DATABASE_URL").unwrap_or_else(|_| "mysql://root:password@localhost:3306/free_cake".into()),
+            database_url: dotenvy::var("DATABASE_URL").unwrap_or_else(|_| "postgres://postgres:password@localhost:5432/free_cake".into()),
             redis_url: dotenvy::var("REDIS_URL").unwrap_or_else(|_| "redis://localhost:6379".into()),
             jwt_secret: dotenvy::var("JWT_SECRET").unwrap_or_else(|_| "dev-secret".into()),
             jwt_expiration_hours: dotenvy::var("JWT_EXPIRATION_HOURS").unwrap_or_else(|_| "24".into()).parse().unwrap_or(24),
@@ -27,6 +28,7 @@ impl AppConfig {
             ai_generation_rate_limit: dotenvy::var("AI_GENERATION_RATE_LIMIT").unwrap_or_else(|_| "5".into()).parse().unwrap_or(5),
             enable_auto_settle: dotenvy::var("ENABLE_AUTO_SETTLE").unwrap_or_else(|_| "true".into()).parse().unwrap_or(true),
             risk_control_enabled: dotenvy::var("RISK_CONTROL_ENABLED").unwrap_or_else(|_| "true".into()).parse().unwrap_or(true),
+            cors_origin: dotenvy::var("CORS_ORIGIN").unwrap_or_else(|_| "".into()),
         }
     }
 }

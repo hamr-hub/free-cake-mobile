@@ -1,4 +1,4 @@
-import { validatePhone, validateVerifyCode, isInRange, validateScene, validateTitle } from '../utils/validators';
+import { validatePhone, validateVerifyCode, isInRange, validateScene, validateTitle } from '../../utils/validators';
 
 describe('validators', () => {
   describe('validatePhone', () => {

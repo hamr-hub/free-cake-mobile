@@ -1,5 +1,6 @@
 use axum::{extract::{State, Path, Query}, Json};
 use serde::{Deserialize, Serialize};
+use sqlx::Row;
 use crate::AppState;
 use crate::errors::AppError;
 use crate::db::models::Region;
@@ -36,8 +37,8 @@ pub async fn create(
     }
 
     let radius = req.coverage_radius_km.unwrap_or(10);
-    let result = sqlx::query(
-        "INSERT INTO region (name, province, city, coverage_radius_km, center_lat, center_lng, status) VALUES (?, ?, ?, ?, ?, ?, 'active')"
+    let row = sqlx::query(
+        "INSERT INTO region (name, province, city, coverage_radius_km, center_lat, center_lng, status) VALUES ($1, $2, $3, $4, $5, $6, 'active') RETURNING id"
     )
     .bind(&req.name)
     .bind(&req.province)
@@ -45,12 +46,12 @@ pub async fn create(
     .bind(radius)
     .bind(req.center_lat)
     .bind(req.center_lng)
-    .execute(&state.db_pool)
+    .fetch_one(&state.db_pool)
     .await
     .map_err(|e| AppError::Internal(e.to_string()))?;
 
     Ok(Json(serde_json::json!({
-        "id": result.last_insert_id(),
+        "id": row.get::<i64, _>("id"),
         "status": "active"
     })))
 }
@@ -63,26 +64,30 @@ pub async fn list(
     let page_size = params.page_size.unwrap_or(20);
     let offset = (page - 1) * page_size;
 
-    let mut count_str = "SELECT COUNT(*) as total FROM region WHERE 1=1".to_string();
-    let mut query_str = "SELECT * FROM region WHERE 1=1".to_string();
-
-    if params.status.is_some() {
-        count_str.push_str(" AND status = ?");
-        query_str.push_str(" AND status = ?");
-    }
-    query_str.push_str(" ORDER BY created_at DESC LIMIT ? OFFSET ?");
-
-    let mut cq = sqlx::query_scalar::<_, i64>(&count_str);
-    let mut q = sqlx::query_as::<_, Region>(&query_str);
+    let mut query_builder = sqlx::QueryBuilder::<sqlx::Postgres>::new("SELECT * FROM region WHERE 1=1");
+    let mut count_builder = sqlx::QueryBuilder::<sqlx::Postgres>::new("SELECT COUNT(*) FROM region WHERE 1=1");
 
     if let Some(ref status) = params.status {
-        cq = cq.bind(status);
-        q = q.bind(status);
+        query_builder.push(" AND status = ");
+        query_builder.push_bind(status);
+        count_builder.push(" AND status = ");
+        count_builder.push_bind(status);
     }
-    q = q.bind(page_size).bind(offset);
 
-    let total = cq.fetch_one(&state.db_pool).await.map_err(|e| AppError::Internal(e.to_string()))?;
-    let list = q.fetch_all(&state.db_pool).await.map_err(|e| AppError::Internal(e.to_string()))?;
+    query_builder.push(" ORDER BY created_at DESC LIMIT ");
+    query_builder.push_bind(page_size);
+    query_builder.push(" OFFSET ");
+    query_builder.push_bind(offset);
+
+    let total = count_builder.build_query_scalar::<i64>()
+        .fetch_one(&state.db_pool)
+        .await
+        .map_err(|e| AppError::Internal(e.to_string()))?;
+
+    let list = query_builder.build_query_as::<Region>()
+        .fetch_all(&state.db_pool)
+        .await
+        .map_err(|e| AppError::Internal(e.to_string()))?;
 
     Ok(Json(RegionListResponse { list, total }))
 }
@@ -91,7 +96,7 @@ pub async fn show(
     State(state): State<AppState>,
     Path(id): Path<i64>,
 ) -> Result<Json<Region>, AppError> {
-    let region = sqlx::query_as::<_, Region>("SELECT * FROM region WHERE id = ?")
+    let region = sqlx::query_as::<_, Region>("SELECT * FROM region WHERE id = $1")
         .bind(id)
         .fetch_optional(&state.db_pool)
         .await
@@ -110,7 +115,7 @@ pub async fn update_status(
         return Err(AppError::BadRequest("Invalid status, must be active or inactive".into()));
     }
 
-    let exists = sqlx::query("SELECT id FROM region WHERE id = ?")
+    let exists = sqlx::query("SELECT id FROM region WHERE id = $1")
         .bind(id)
         .fetch_optional(&state.db_pool)
         .await
@@ -119,7 +124,7 @@ pub async fn update_status(
         return Err(AppError::NotFound("Region not found".into()));
     }
 
-    sqlx::query("UPDATE region SET status = ? WHERE id = ?")
+    sqlx::query("UPDATE region SET status = $1 WHERE id = $2")
         .bind(&req.new_status)
         .bind(id)
         .execute(&state.db_pool)

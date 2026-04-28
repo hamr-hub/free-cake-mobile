@@ -42,3 +42,19 @@ pub async fn auth_middleware(
 
     Ok(next.run(req).await)
 }
+
+pub async fn admin_only_middleware(
+    req: Request<Body>,
+    next: Next,
+) -> Result<Response, AppError> {
+    let claims = req.extensions()
+        .get::<Claims>()
+        .cloned()
+        .ok_or_else(|| AppError::Unauthorized("Missing auth claims".into()))?;
+
+    if claims.role != "admin" && claims.role != "operator" {
+        return Err(AppError::Forbidden("Admin access required".into()));
+    }
+
+    Ok(next.run(req).await)
+}

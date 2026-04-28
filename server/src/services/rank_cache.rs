@@ -4,7 +4,6 @@ use crate::errors::AppError;
 pub struct RankCacheService;
 
 impl RankCacheService {
-    #[allow(dead_code)]
     pub async fn get_rank(
         client: &Client,
         activity_id: i64,

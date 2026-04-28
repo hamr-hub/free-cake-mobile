@@ -38,10 +38,11 @@ pub struct SubmitEntryResponse {
 
 pub async fn generate(
     State(state): State<AppState>,
+    Extension(claims): Extension<Claims>,
     Path(activity_id): Path<i64>,
     Json(req): Json<GenerateRequest>,
 ) -> Result<Json<GenerateResponse>, AppError> {
-    let activity = sqlx::query("SELECT status FROM activity WHERE id = ?")
+    let activity = sqlx::query("SELECT status FROM activity WHERE id = $1")
         .bind(activity_id)
         .fetch_optional(&state.db_pool)
         .await
@@ -87,9 +88,10 @@ pub async fn generate(
     let image_urls_str = serde_json::to_string(&images).unwrap_or_default();
     let template_ids_str = serde_json::to_string(&template_ids).unwrap_or_default();
 
-    let result = sqlx::query(
-        "INSERT INTO ai_generation_record (user_id, activity_id, scene, theme, blessing, color_preference, style, prompt, image_urls, template_ids, status) VALUES (0, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'completed')"
+    let row = sqlx::query(
+        "INSERT INTO ai_generation_record (user_id, activity_id, scene, theme, blessing, color_preference, style, prompt, image_urls, template_ids, status) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'completed') RETURNING id"
     )
+    .bind(claims.user_id)
     .bind(activity_id)
     .bind(&req.scene)
     .bind(&req.theme)
@@ -99,12 +101,12 @@ pub async fn generate(
     .bind(&prompt)
     .bind(&image_urls_str)
     .bind(&template_ids_str)
-    .execute(&state.db_pool)
+    .fetch_one(&state.db_pool)
     .await
     .map_err(|e| AppError::Internal(e.to_string()))?;
 
     Ok(Json(GenerateResponse {
-        generation_id: result.last_insert_id() as i64,
+        generation_id: row.get::<i64, _>("id"),
         images,
         template_ids,
     }))
@@ -116,7 +118,7 @@ pub async fn submit(
     Path(activity_id): Path<i64>,
     Json(req): Json<SubmitEntryRequest>,
 ) -> Result<Json<SubmitEntryResponse>, AppError> {
-    let activity = sqlx::query("SELECT status, region_id FROM activity WHERE id = ?")
+    let activity = sqlx::query("SELECT status, region_id FROM activity WHERE id = $1")
         .bind(activity_id)
         .fetch_optional(&state.db_pool)
         .await
@@ -127,7 +129,7 @@ pub async fn submit(
         return Err(AppError::BadRequest("Activity is not open for entry submission".into()));
     }
 
-    let generation = sqlx::query("SELECT image_urls, template_ids FROM ai_generation_record WHERE id = ? AND activity_id = ?")
+    let generation = sqlx::query("SELECT image_urls, template_ids FROM ai_generation_record WHERE id = $1 AND activity_id = $2")
         .bind(req.selected_generation_id)
         .bind(activity_id)
         .fetch_optional(&state.db_pool)
@@ -141,8 +143,8 @@ pub async fn submit(
 
     let share_code = uuid::Uuid::new_v4().to_string()[..8].to_string();
 
-    let result = sqlx::query(
-        "INSERT INTO contest_entry (activity_id, user_id, selected_generation_id, selected_template_id, title, share_code, image_url, status) VALUES (?, ?, ?, ?, ?, ?, ?, 'active')"
+    let row = sqlx::query(
+        "INSERT INTO contest_entry (activity_id, user_id, selected_generation_id, selected_template_id, title, share_code, image_url, status) VALUES ($1, $2, $3, $4, $5, $6, $7, 'active') RETURNING id"
     )
     .bind(activity_id)
     .bind(claims.user_id)
@@ -151,12 +153,12 @@ pub async fn submit(
     .bind(&req.title)
     .bind(&share_code)
     .bind(&selected_image)
-    .execute(&state.db_pool)
+    .fetch_one(&state.db_pool)
     .await
     .map_err(|e| AppError::Internal(e.to_string()))?;
 
     Ok(Json(SubmitEntryResponse {
-        entry_id: result.last_insert_id() as i64,
+        entry_id: row.get::<i64, _>("id"),
         share_code,
     }))
 }
@@ -176,7 +178,7 @@ pub async fn update_status(
         return Err(AppError::BadRequest("Invalid status, must be approved/rejected/active".into()));
     }
 
-    let exists = sqlx::query("SELECT id, status FROM contest_entry WHERE id = ?")
+    let exists = sqlx::query("SELECT id, status FROM contest_entry WHERE id = $1")
         .bind(entry_id)
         .fetch_optional(&state.db_pool)
         .await
@@ -185,7 +187,7 @@ pub async fn update_status(
         return Err(AppError::NotFound("Entry not found".into()));
     }
 
-    sqlx::query("UPDATE contest_entry SET status = ? WHERE id = ?")
+    sqlx::query("UPDATE contest_entry SET status = $1 WHERE id = $2")
         .bind(&req.status)
         .bind(entry_id)
         .execute(&state.db_pool)
@@ -210,7 +212,7 @@ pub async fn freeze(
 ) -> Result<Json<serde_json::Value>, AppError> {
     let new_status = if req.freeze { "frozen" } else { "active" };
 
-    let exists = sqlx::query("SELECT id FROM contest_entry WHERE id = ?")
+    let exists = sqlx::query("SELECT id FROM contest_entry WHERE id = $1")
         .bind(entry_id)
         .fetch_optional(&state.db_pool)
         .await
@@ -219,7 +221,7 @@ pub async fn freeze(
         return Err(AppError::NotFound("Entry not found".into()));
     }
 
-    sqlx::query("UPDATE contest_entry SET status = ? WHERE id = ?")
+    sqlx::query("UPDATE contest_entry SET status = $1 WHERE id = $2")
         .bind(new_status)
         .bind(entry_id)
         .execute(&state.db_pool)
@@ -247,7 +249,7 @@ pub async fn deduct_votes(
         return Err(AppError::BadRequest("Count must be positive".into()));
     }
 
-    let entry = sqlx::query("SELECT id, valid_vote_count FROM contest_entry WHERE id = ?")
+    let entry = sqlx::query("SELECT id, valid_vote_count FROM contest_entry WHERE id = $1")
         .bind(entry_id)
         .fetch_optional(&state.db_pool)
         .await
@@ -260,7 +262,7 @@ pub async fn deduct_votes(
         return Err(AppError::BadRequest(format!("Cannot deduct {} votes from entry with {} valid votes", req.count, current_votes)));
     }
 
-    sqlx::query("UPDATE contest_entry SET valid_vote_count = ? WHERE id = ?")
+    sqlx::query("UPDATE contest_entry SET valid_vote_count = $1 WHERE id = $2")
         .bind(new_votes)
         .bind(entry_id)
         .execute(&state.db_pool)

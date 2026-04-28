@@ -11,7 +11,7 @@ interface PublishScreenProps {
 }
 
 export function PublishScreen({ route, navigation }: PublishScreenProps) {
-  const { activityId, imageUrl, imageIndex } = route?.params ?? {};
+  const { activityId = 0, imageUrl = '', imageIndex = 0 } = route?.params ?? {};
   const [title, setTitle] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isPublished, setIsPublished] = useState(false);
@@ -27,9 +27,9 @@ export function PublishScreen({ route, navigation }: PublishScreenProps) {
     setIsLoading(true);
     setError('');
     try {
-      const data = await submitEntry(activityId, {
-        selected_generation_id: imageIndex + 1,
-        selected_template_id: imageIndex + 1,
+      const data = await submitEntry(activityId as number, {
+        selected_generation_id: (imageIndex as number) + 1,
+        selected_template_id: (imageIndex as number) + 1,
         title: title.trim(),
       });
       setEntryId(data.entry_id);
@@ -86,7 +86,7 @@ export function PublishScreen({ route, navigation }: PublishScreenProps) {
           <SharePoster
             entryId={entryId ?? 0}
             title={title}
-            imageUrl={imageUrl}
+            imageUrl={imageUrl ?? ''}
             shareCode={shareCode}
           />
 

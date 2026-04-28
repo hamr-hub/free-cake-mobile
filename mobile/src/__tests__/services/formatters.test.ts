@@ -1,4 +1,4 @@
-import { formatDate, formatCountdown, formatVoteCount, formatRank, formatDistance, formatPhone } from '../utils/formatters';
+import { formatDate, formatCountdown, formatVoteCount, formatRank, formatDistance, formatPhone } from '../../utils/formatters';
 
 describe('formatters', () => {
   describe('formatDate', () => {

@@ -1,0 +1,118 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  server-ci:
+    name: Server (Rust) - Lint & Test
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: test_pwd
+          POSTGRES_DB: free_cake_test
+          POSTGRES_USER: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres -d free_cake_test"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - name: Cache Cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            server/target
+          key: rust-${{ runner.os }}-${{ hashFiles('server/Cargo.lock') }}
+          restore-keys: rust-${{ runner.os }}-
+
+      - name: Wait for PostgreSQL
+        run: |
+          for i in $(seq 1 30); do
+            if pg_isready -h 127.0.0.1 -U postgres -d free_cake_test; then break; fi
+            sleep 2
+          done
+
+      - name: Run migrations
+        working-directory: server
+        run: psql -h 127.0.0.1 -U postgres -d free_cake_test < src/db/migrations/001_init.sql
+        env:
+          PGPASSWORD: test_pwd
+
+      - name: Clippy
+        working-directory: server
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: Rustfmt check
+        working-directory: server
+        run: cargo fmt --all -- --check
+
+      - name: Run tests
+        working-directory: server
+        env:
+          DATABASE_URL: postgres://postgres:test_pwd@127.0.0.1:5432/free_cake_test
+          REDIS_URL: redis://127.0.0.1:6379
+          JWT_SECRET: test-secret
+          SERVER_PORT: 3000
+        run: cargo test --all
+
+  client-ci:
+    name: Client (React) - Lint & Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: client/package-lock.json
+
+      - name: Install dependencies
+        working-directory: client
+        run: npm ci
+
+      - name: Lint
+        working-directory: client
+        run: npm run lint
+
+      - name: TypeCheck
+        working-directory: client
+        run: npm run typecheck
+
+      - name: Build
+        working-directory: client
+        run: npm run build
+
+      - name: Test
+        working-directory: client
+        run: npm test -- --passWithNoTests

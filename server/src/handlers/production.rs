@@ -8,7 +8,7 @@ pub async fn complete_task(
     State(state): State<AppState>,
     Path(task_id): Path<i64>,
 ) -> Result<Json<serde_json::Value>, AppError> {
-    let task = sqlx::query("SELECT id, task_status, order_id FROM production_task WHERE id = ?")
+    let task = sqlx::query("SELECT id, task_status, order_id FROM production_task WHERE id = $1")
         .bind(task_id)
         .fetch_optional(&state.db_pool)
         .await
@@ -21,13 +21,13 @@ pub async fn complete_task(
         return Err(AppError::BadRequest("Task must be in_progress to complete".into()));
     }
 
-    sqlx::query("UPDATE production_task SET task_status = 'completed', completed_at = NOW() WHERE id = ?")
+    sqlx::query("UPDATE production_task SET task_status = 'completed', completed_at = CURRENT_TIMESTAMP WHERE id = $1")
         .bind(task_id)
         .execute(&state.db_pool)
         .await
         .map_err(|e| AppError::Internal(e.to_string()))?;
 
-    sqlx::query("UPDATE reward_order SET production_status = 'completed' WHERE id = ?")
+    sqlx::query("UPDATE reward_order SET production_status = 'completed' WHERE id = $1")
         .bind(order_id)
         .execute(&state.db_pool)
         .await

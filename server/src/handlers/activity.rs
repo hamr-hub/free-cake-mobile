@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use crate::AppState;
 use crate::errors::AppError;
 use crate::db::models::Activity;
+use sqlx::Row;
 
 #[derive(Deserialize)]
 pub struct CreateActivityRequest {
@@ -13,6 +14,12 @@ pub struct CreateActivityRequest {
     pub voting_start_at: String,
     pub voting_end_at: String,
     pub max_winner_count: i32,
+    pub max_votes_per_day: Option<i32>,
+    pub cake_size: Option<String>,
+    pub cream_type: Option<String>,
+    pub ai_generation_rate_limit: Option<i32>,
+    pub allow_ai_entry: Option<bool>,
+    pub weighted_voting: Option<bool>,
 }
 
 #[derive(Deserialize)]
@@ -51,7 +58,7 @@ pub async fn create(
         return Err(AppError::BadRequest("max_winner_count must be positive".into()));
     }
 
-    let region_exists = sqlx::query("SELECT id FROM region WHERE id = ? AND status = 'active'")
+    let region_exists = sqlx::query("SELECT id FROM region WHERE id = $1 AND status = 'active'")
         .bind(req.region_id)
         .fetch_optional(&state.db_pool)
         .await
@@ -60,8 +67,8 @@ pub async fn create(
         return Err(AppError::BadRequest("Region not found or inactive".into()));
     }
 
-    let result = sqlx::query(
-        "INSERT INTO activity (region_id, name, registration_start_at, registration_end_at, voting_start_at, voting_end_at, max_winner_count, status) VALUES (?, ?, ?, ?, ?, ?, ?, 'draft')"
+    let row = sqlx::query(
+        "INSERT INTO activity (region_id, name, registration_start_at, registration_end_at, voting_start_at, voting_end_at, max_winner_count, status) VALUES ($1, $2, $3, $4, $5, $6, $7, 'draft') RETURNING id"
     )
     .bind(req.region_id)
     .bind(&req.name)
@@ -70,12 +77,32 @@ pub async fn create(
     .bind(&req.voting_start_at)
     .bind(&req.voting_end_at)
     .bind(req.max_winner_count)
+    .fetch_one(&state.db_pool)
+    .await
+    .map_err(|e| AppError::Internal(e.to_string()))?;
+
+    let activity_id = row.get::<i64, _>("id");
+
+    // Create default activity_rule
+    let max_votes = req.max_votes_per_day.unwrap_or(3);
+    let cake_size = req.cake_size.unwrap_or_else(|| "6inch".to_string());
+    let cream_type = req.cream_type.unwrap_or_else(|| "animal".to_string());
+    let ai_rate = req.ai_generation_rate_limit.unwrap_or(5);
+
+    sqlx::query(
+        "INSERT INTO activity_rule (activity_id, max_votes_per_day, cake_size, cream_type, decoration_params) VALUES ($1, $2, $3, $4, $5)"
+    )
+    .bind(activity_id)
+    .bind(max_votes)
+    .bind(&cake_size)
+    .bind(&cream_type)
+    .bind(format!("{{\"ai_generation_rate_limit\":{}}}", ai_rate))
     .execute(&state.db_pool)
     .await
     .map_err(|e| AppError::Internal(e.to_string()))?;
 
     Ok(Json(CreateActivityResponse {
-        id: result.last_insert_id() as i64,
+        id: activity_id,
         status: "draft".to_string(),
     }))
 }
@@ -88,35 +115,36 @@ pub async fn list(
     let page_size = params.page_size.unwrap_or(20);
     let offset = (page - 1) * page_size;
 
-    let mut query_str = "SELECT * FROM activity WHERE 1=1".to_string();
-    let mut count_str = "SELECT COUNT(*) as total FROM activity WHERE 1=1".to_string();
-
-    if params.status.is_some() {
-        query_str.push_str(" AND status = ?");
-        count_str.push_str(" AND status = ?");
-    }
-    if params.region_id.is_some() {
-        query_str.push_str(" AND region_id = ?");
-        count_str.push_str(" AND region_id = ?");
-    }
-
-    query_str.push_str(" ORDER BY created_at DESC LIMIT ? OFFSET ?");
-
-    let mut q = sqlx::query_as::<_, Activity>(&query_str);
-    let mut cq = sqlx::query_scalar::<_, i64>(&count_str);
+    let mut query_builder = sqlx::QueryBuilder::<sqlx::Postgres>::new("SELECT * FROM activity WHERE 1=1");
+    let mut count_builder = sqlx::QueryBuilder::<sqlx::Postgres>::new("SELECT COUNT(*) FROM activity WHERE 1=1");
 
     if let Some(ref status) = params.status {
-        q = q.bind(status);
-        cq = cq.bind(status);
+        query_builder.push(" AND status = ");
+        query_builder.push_bind(status);
+        count_builder.push(" AND status = ");
+        count_builder.push_bind(status);
     }
-    if let Some(ref region_id) = params.region_id {
-        q = q.bind(*region_id);
-        cq = cq.bind(*region_id);
+    if let Some(region_id) = params.region_id {
+        query_builder.push(" AND region_id = ");
+        query_builder.push_bind(region_id);
+        count_builder.push(" AND region_id = ");
+        count_builder.push_bind(region_id);
     }
-    q = q.bind(page_size).bind(offset);
 
-    let total = cq.fetch_one(&state.db_pool).await.map_err(|e| AppError::Internal(e.to_string()))?;
-    let list = q.fetch_all(&state.db_pool).await.map_err(|e| AppError::Internal(e.to_string()))?;
+    query_builder.push(" ORDER BY created_at DESC LIMIT ");
+    query_builder.push_bind(page_size);
+    query_builder.push(" OFFSET ");
+    query_builder.push_bind(offset);
+
+    let total = count_builder.build_query_scalar::<i64>()
+        .fetch_one(&state.db_pool)
+        .await
+        .map_err(|e| AppError::Internal(e.to_string()))?;
+
+    let list = query_builder.build_query_as::<Activity>()
+        .fetch_all(&state.db_pool)
+        .await
+        .map_err(|e| AppError::Internal(e.to_string()))?;
 
     Ok(Json(ActivityListResponse { list, total }))
 }
@@ -125,7 +153,7 @@ pub async fn show(
     State(state): State<AppState>,
     Path(id): Path<i64>,
 ) -> Result<Json<Activity>, AppError> {
-    let activity = sqlx::query_as::<_, Activity>("SELECT * FROM activity WHERE id = ?")
+    let activity = sqlx::query_as::<_, Activity>("SELECT * FROM activity WHERE id = $1")
         .bind(id)
         .fetch_optional(&state.db_pool)
         .await
@@ -149,7 +177,7 @@ pub async fn update_status(
         return Err(AppError::BadRequest(format!("Invalid status: {}", req.new_status)));
     }
 
-    let activity = sqlx::query_as::<_, Activity>("SELECT * FROM activity WHERE id = ?")
+    let activity = sqlx::query_as::<_, Activity>("SELECT * FROM activity WHERE id = $1")
         .bind(id)
         .fetch_optional(&state.db_pool)
         .await
@@ -163,7 +191,7 @@ pub async fn update_status(
         )));
     }
 
-    sqlx::query("UPDATE activity SET status = ? WHERE id = ?")
+    sqlx::query("UPDATE activity SET status = $1 WHERE id = $2")
         .bind(&req.new_status)
         .bind(id)
         .execute(&state.db_pool)

@@ -76,7 +76,37 @@
 | 层 | 技术 |
 |----|------|
 | 前端 B 端 | refine + react + vite + Ant Design |
-| 后端 | Rust (Axum) |
-| 数据层 | MySQL + Redis |
-| 对象存储 | OSS/COS |
+| 前端 C 端 | React Native 0.76 + React Navigation 6 |
+| 后端 | Rust (Axum 0.7) |
+| 数据层 | PostgreSQL 16 + Redis 7 |
+| 对象存储 | Supabase Storage / OSS |
 | 架构 | 模块化单体优先 |
+
+## 当前实现状态 (2026-04-29)
+
+### 服务端 (50+ 端点, 9 DB migrations)
+- **认证**: 手机号+验证码登录、微信 OpenID 登录、手机号绑定、JWT 刷新/注销/黑名单
+- **活动管理**: CRUD + 状态机流转 + 规则配置 + 模板复用 + banner_url
+- **参赛与 AI**: 作品提交、AI 生成脚手架（mock URL）、模板选择
+- **投票与排行**: 投票含风控校验、Redis 排名缓存、RANK() 窗口函数排行、user_name/is_winner
+- **开奖结算**: 手动+自动结算（winner_record + reward_order + redeem_code 联动生成）
+- **订单**: 免费订单自动生成、付费下单（price_config 查询 + 活动状态/作品状态校验 + DB 事务防竞态）、订单详情/列表
+- **支付**: 微信 JSAPI 支付集成、prepay_id + PrepayParams 返回、回调验签脚手架（dev 模式降级）、退款 API 脚手架
+- **核销**: 到店扫码核销、Redis 分布式锁防重复、重发核销码
+- **库存**: CRUD + 出入库流水 + 安全阈值预警
+- **排产**: 任务状态机 (pending→in_progress→completed/paused/error/cancelled)
+- **风控**: 多维度联合判定、异常事件持久化（含 show 端点）、批量冻结/扣票
+- **后台调度**: 活动自动流转、订单超时关闭、自动结算
+- **中间件**: RBAC 鉴权、IP 限流、公开端点限流、请求 ID、Prometheus 指标、安全头、体量限制
+- **对账**: 支付-订单对账、投票计数漂移、库存余额漂移
+- **报表**: 汇总 + 对账 + 日/周/月报（含 region_id 过滤）
+- **单元测试**: 46 个全通过
+
+### B 端客户端 (14 资源模块, tsc 0 errors)
+- Dashboard、活动(列表/创建/编辑/详情)、赛区(列表/创建/编辑/详情)、作品(列表/详情)、投票风控(列表/详情)、开奖(列表/详情)、排产(列表/详情)、核销(列表/详情)、库存(列表/详情)、门店(列表/创建/编辑/详情)、人员(列表/创建/编辑/详情/考勤)、报表、价格(列表/详情)、订单(列表/详情)、模板(列表/详情)、审计日志(列表/详情)、风控事件(列表/详情)
+- dataProvider URL 前缀已修复，所有 useCustom 列表页正常加载
+
+### C 端移动端 (12 屏幕, tsc 0 errors)
+- 登录、微信登录+手机绑定、首页、AI 生成、发布、作品详情、排行榜、规则说明、个人中心、下单、订单详情、领奖核销
+- 完整 TypeScript 类型系统，所有 API 响应字段与服务器对齐
+- AuthContext 登录后自动获取 regionId

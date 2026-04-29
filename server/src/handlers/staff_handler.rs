@@ -6,6 +6,7 @@ use crate::errors::AppError;
 use crate::db::models::{Staff, AttendanceRecord};
 use crate::services::audit_log::AuditLogService;
 use crate::app_middleware::auth::Claims;
+use crate::services::validation;
 
 #[derive(Deserialize)]
 pub struct CreateStaffRequest {
@@ -37,6 +38,7 @@ pub async fn create(
     if req.name.is_empty() || req.phone.is_empty() {
         return Err(AppError::BadRequest("Name and phone are required".into()));
     }
+    validation::validate_phone(&req.phone)?;
 
     let store_exists = sqlx::query("SELECT id FROM store WHERE id = $1 AND status = 'active'")
         .bind(req.store_id)
@@ -158,6 +160,37 @@ pub async fn update_status(
 #[derive(Deserialize)]
 pub struct UpdateStaffStatusRequest {
     pub new_status: String,
+}
+
+#[derive(Deserialize)]
+pub struct UpdateStaffRequest {
+    pub name: Option<String>,
+    pub phone: Option<String>,
+    pub store_id: Option<i64>,
+    pub role: Option<String>,
+}
+
+pub async fn update(
+    State(state): State<AppState>,
+    Extension(claims): Extension<Claims>,
+    Path(id): Path<i64>,
+    Json(req): Json<UpdateStaffRequest>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    let mut builder = sqlx::QueryBuilder::<sqlx::Postgres>::new("UPDATE staff SET updated_at = NOW()");
+    if let Some(ref v) = req.name { builder.push(", name = "); builder.push_bind(v); }
+    if let Some(ref v) = req.phone {
+        validation::validate_phone(v)?;
+        builder.push(", phone = "); builder.push_bind(v);
+    }
+    if let Some(v) = req.store_id { builder.push(", store_id = "); builder.push_bind(v); }
+    if let Some(ref v) = req.role { builder.push(", role = "); builder.push_bind(v); }
+    builder.push(" WHERE id = "); builder.push_bind(id);
+
+    builder.build().execute(&state.db_pool).await.map_err(|e| AppError::Internal(e.to_string()))?;
+
+    AuditLogService::log_with_pool(&state.db_pool, claims.user_id, "update", "staff", id, "updated staff fields").await;
+
+    Ok(Json(serde_json::json!({ "id": id })))
 }
 
 // ---- Attendance API ----

@@ -7,7 +7,9 @@ fn test_jwt_token_generation_and_verification() {
     let claims = Claims {
         user_id: 1,
         role: "admin".to_string(),
+        jti: "test-jti".to_string(),
         exp: 9999999999,
+        open_id: None,
     };
 
     let token = encode(
@@ -33,7 +35,9 @@ fn test_jwt_token_wrong_secret_fails() {
     let claims = Claims {
         user_id: 1,
         role: "admin".to_string(),
+        jti: "test-jti".to_string(),
         exp: 9999999999,
+        open_id: None,
     };
 
     let token = encode(
@@ -57,7 +61,9 @@ fn test_jwt_token_expired_fails() {
     let claims = Claims {
         user_id: 1,
         role: "admin".to_string(),
+        jti: "test-jti".to_string(),
         exp: 1,
+        open_id: None,
     };
 
     let token = encode(
@@ -77,15 +83,15 @@ fn test_jwt_token_expired_fails() {
 
 #[test]
 fn test_phone_validation_empty_rejected() {
-    let phone = "";
-    let verify_code = "123456";
+    let phone = String::new();
+    let verify_code = String::from("123456");
     assert!(phone.is_empty() || verify_code.is_empty());
 }
 
 #[test]
 fn test_phone_validation_nonempty_accepted() {
-    let phone = "13812345678";
-    let verify_code = "123456";
+    let phone = String::from("13812345678");
+    let verify_code = String::from("123456");
     assert!(!phone.is_empty() && !verify_code.is_empty());
 }
 

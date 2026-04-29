@@ -3,7 +3,7 @@ import { View, Text, StyleSheet } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
 import { colors } from '../theme';
 import { spacing, borderRadius, typography } from '../theme';
-import { formatDate, formatDistance } from '../utils/formatters';
+import { formatDate } from '../utils/formatters';
 import { RedeemCode } from '../types/redeem';
 
 interface QRCodeCardProps {
@@ -26,15 +26,14 @@ export function QRCodeCard({ redeemCode }: QRCodeCardProps) {
       </View>
       <View style={styles.info}>
         <Text style={styles.code}>{redeemCode.code}</Text>
-        <Text style={styles.cakeName}>{redeemCode.cake_name}</Text>
+        <Text style={styles.cakeName}>
+          {redeemCode.cake_size} {redeemCode.cream_type}蛋糕
+        </Text>
         <Text style={styles.storeAddress}>
           领取地点: {redeemCode.store_address}
         </Text>
-        <Text style={styles.distance}>
-          距您 {formatDistance(redeemCode.store_distance)}
-        </Text>
         <Text style={styles.expire}>
-          领取截止: {formatDate(redeemCode.expire_at)}
+          领取截止: {formatDate(redeemCode.expires_at)}
         </Text>
         {isExpired && <Text style={styles.statusExpired}>已过期</Text>}
         {isUsed && <Text style={styles.statusUsed}>已核销</Text>}
@@ -79,10 +78,6 @@ const styles = StyleSheet.create({
     ...typography.body,
     color: colors.textSecondary,
     marginTop: spacing.md,
-  },
-  distance: {
-    ...typography.caption,
-    color: colors.textHint,
   },
   expire: {
     ...typography.caption,

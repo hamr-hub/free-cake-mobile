@@ -7,6 +7,7 @@ import {
   ScrollView,
   StyleSheet,
   ActivityIndicator,
+  Image,
 } from 'react-native';
 import { SCENES, STYLES, COLOR_PREFERENCES, AI_GENERATE_RATE_LIMIT } from '../utils/constants';
 import { Scene, Style, ColorPreference } from '../utils/constants';
@@ -28,6 +29,8 @@ export function GenerateScreen({ route, navigation }: GenerateScreenProps) {
   const [style, setStyle] = useState<Style>('cartoon');
   const [isLoading, setIsLoading] = useState(false);
   const [generatedImages, setGeneratedImages] = useState<string[]>([]);
+  const [templateIds, setTemplateIds] = useState<number[]>([]);
+  const [generationId, setGenerationId] = useState<number>(0);
   const [selectedImageIndex, setSelectedImageIndex] = useState<number | null>(null);
   const [error, setError] = useState('');
 
@@ -55,6 +58,8 @@ export function GenerateScreen({ route, navigation }: GenerateScreenProps) {
         style,
       });
       setGeneratedImages(data.images ?? []);
+      setTemplateIds(data.template_ids ?? []);
+      setGenerationId(data.generation_id ?? 0);
     } catch (err: any) {
       setError(err.response?.data?.message ?? '生成失败，请重试');
     } finally {
@@ -72,6 +77,8 @@ export function GenerateScreen({ route, navigation }: GenerateScreenProps) {
         activityId,
         imageUrl: generatedImages[selectedImageIndex],
         imageIndex: selectedImageIndex,
+        generationId,
+        templateId: templateIds[selectedImageIndex] ?? 0,
       });
     }
   };
@@ -165,9 +172,13 @@ export function GenerateScreen({ route, navigation }: GenerateScreenProps) {
                 style={[styles.imageItem, selectedImageIndex === index && styles.imageItemSelected]}
                 onPress={() => handleSelect(index)}
               >
-                <View style={styles.imagePlaceholder}>
-                  <Text style={styles.imagePlaceholderText}>设计 #{index + 1}</Text>
-                </View>
+                {url.startsWith('placeholder://') ? (
+                  <View style={styles.imagePlaceholder}>
+                    <Text style={styles.imagePlaceholderText}>设计 #{index + 1}</Text>
+                  </View>
+                ) : (
+                  <Image source={{ uri: url }} style={styles.imageThumb} resizeMode="cover" />
+                )}
                 {selectedImageIndex === index && (
                   <View style={styles.selectedOverlay}>
                     <Text style={styles.selectedText}>已选择</Text>
@@ -285,6 +296,10 @@ const styles = StyleSheet.create({
   imagePlaceholderText: {
     ...typography.caption,
     color: colors.textHint,
+  },
+  imageThumb: {
+    flex: 1,
+    width: '100%',
   },
   selectedOverlay: {
     position: 'absolute',

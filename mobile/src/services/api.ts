@@ -2,6 +2,34 @@ import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'ax
 import { API_BASE_URL, DEFAULT_TIMEOUT, AI_GENERATE_TIMEOUT, MAX_RETRY_COUNT, RETRY_DELAY_MS } from '../utils/constants';
 import { storage } from './storage';
 
+let refreshPromise: Promise<string | null> | null = null;
+
+async function getOrRefreshToken(): Promise<string | null> {
+  if (refreshPromise) return refreshPromise;
+
+  refreshPromise = (async () => {
+    const token = storage.getToken();
+    if (!token) return null;
+    try {
+      const res = await axios.post(`${API_BASE_URL}/auth/refresh`, {}, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.data?.token) {
+        storage.setToken(res.data.token);
+        return res.data.token;
+      }
+      return null;
+    } catch {
+      storage.clearToken();
+      return null;
+    } finally {
+      refreshPromise = null;
+    }
+  })();
+
+  return refreshPromise;
+}
+
 const apiClient: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,
   timeout: DEFAULT_TIMEOUT,
@@ -23,12 +51,18 @@ apiClient.interceptors.response.use(
   async (error: AxiosError) => {
     const config = error.config as InternalAxiosRequestConfig & { _retry?: number };
 
-    if (error.response?.status === 401) {
+    if (error.response?.status === 401 && config._retry !== 1) {
+      config._retry = 1;
+      const newToken = await getOrRefreshToken();
+      if (newToken && config.headers) {
+        config.headers.Authorization = `Bearer ${newToken}`;
+        return apiClient(config);
+      }
       storage.clearToken();
       return Promise.reject(error);
     }
 
-    if (!config._retry) {
+    if (config._retry === undefined) {
       config._retry = 0;
     }
 
@@ -49,7 +83,7 @@ export async function login(phone: string, verifyCode: string) {
 }
 
 export async function sendVerifyCode(phone: string) {
-  const response = await apiClient.post('/auth/send-code', { phone });
+  const response = await apiClient.post('/auth/send-verify-code', { phone });
   return response.data;
 }
 
@@ -98,18 +132,53 @@ export async function getRedeemDetail(code: string) {
   return response.data;
 }
 
-export async function getDashboardStats() {
-  const response = await apiClient.get('/dashboard/stats');
-  return response.data;
-}
-
 export async function getEntryDetail(entryId: number) {
   const response = await apiClient.get(`/entries/${entryId}`);
   return response.data;
 }
 
-export async function getRiskEvents(limit: number = 50) {
-  const response = await apiClient.get('/risk-events', { params: { limit } });
+export async function resolveRegion(lat: number, lng: number) {
+  const response = await apiClient.get('/users/resolve-region', { params: { lat, lng } });
+  return response.data;
+}
+
+export async function createPaidOrder(data: { entry_id: number; cake_size: string; cream_type: string; store_id: number }) {
+  const response = await apiClient.post('/orders', data);
+  return response.data;
+}
+
+export async function getOrderDetail(orderId: number) {
+  const response = await apiClient.get(`/orders/${orderId}`);
+  return response.data;
+}
+
+export async function initPay(orderId: number) {
+  const response = await apiClient.post(`/orders/${orderId}/init-pay`);
+  return response.data;
+}
+
+export async function wechatLogin(code: string) {
+  const response = await apiClient.post('/auth/wechat-login', { code });
+  return response.data;
+}
+
+export async function bindPhone(data: { openid: string; phone: string; verify_code: string }) {
+  const response = await apiClient.post('/auth/bind-phone', data);
+  return response.data;
+}
+
+export async function getActivityRules(activityId: number) {
+  const response = await apiClient.get(`/activities/${activityId}/rules`);
+  return response.data;
+}
+
+export async function getPrices(params: { region_id?: number }) {
+  const response = await apiClient.get('/prices', { params });
+  return response.data;
+}
+
+export async function getStores(params: { region_id?: number }) {
+  const response = await apiClient.get('/stores', { params });
   return response.data;
 }
 

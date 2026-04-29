@@ -1,12 +1,12 @@
 #[test]
 fn test_redeem_code_validation_empty() {
-    let code = "";
+    let code = String::new();
     assert!(code.is_empty());
 }
 
 #[test]
 fn test_redeem_code_validation_nonempty() {
-    let code = "abc12345";
+    let code = String::from("abc12345");
     assert!(!code.is_empty());
 }
 

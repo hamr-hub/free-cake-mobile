@@ -1,7 +1,7 @@
 import React from "react";
 import { useTable, List, ShowButton } from "@refinedev/antd";
 import { Table, Space, Tag, Button, Popconfirm } from "antd";
-import { useNotification } from "@refinedev/core";
+import { useNotification, useCustomMutation } from "@refinedev/core";
 import { PlayCircleOutlined } from "@ant-design/icons";
 
 const statusColorMap: Record<string, string> = {
@@ -37,17 +37,15 @@ export const ActivityList: React.FC = () => {
   const { tableProps } = useTable({ resource: "activities" });
   const { open } = useNotification();
 
+  const { mutateAsync: statusMutate } = useCustomMutation();
+
   const handleStatusTransition = async (activityId: number, newStatus: string) => {
     try {
-      const res = await fetch(`/api/activities/${activityId}/status`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
-        },
-        body: JSON.stringify({ new_status: newStatus }),
+      await statusMutate({
+        url: `/api/activities/${activityId}/status`,
+        method: "post",
+        values: { new_status: newStatus },
       });
-      if (!res.ok) throw new Error("状态切换失败");
       open?.({
         type: "success",
         message: "状态切换成功",

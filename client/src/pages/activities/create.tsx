@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { useForm, Create } from "@refinedev/antd";
 import { Form, Input, DatePicker, InputNumber, Row, Col, Card, Select, Switch, Divider, Space, Tag } from "antd";
+import { useCustom } from "@refinedev/core";
 
 const { RangePicker } = DatePicker;
 
@@ -35,19 +36,13 @@ export const ActivityCreate: React.FC = () => {
   });
 
   const [rules, setRules] = useState<ActivityRules>(defaultRules);
-  const [templates, setTemplates] = useState<ActivityTemplate[]>([]);
   const [selectedTemplate, setSelectedTemplate] = useState<number | null>(null);
 
-  useEffect(() => {
-    fetch("/api/activities/templates", {
-      headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
-    })
-      .then((res) => res.json())
-      .then((data) => {
-        if (Array.isArray(data)) setTemplates(data);
-      })
-      .catch(() => {});
-  }, []);
+  const { query: templatesQuery } = useCustom({
+    url: "/api/activities/templates",
+    method: "get",
+  });
+  const templates = (templatesQuery.data?.data || []) as ActivityTemplate[];
 
   const handleTemplateSelect = (templateId: number) => {
     const tpl = templates.find((t) => t.id === templateId);

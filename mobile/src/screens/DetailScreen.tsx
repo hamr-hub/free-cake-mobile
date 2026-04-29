@@ -10,32 +10,35 @@ import {
   Alert,
   Share,
 } from 'react-native';
-import { useNavigation, useRoute } from '@react-navigation/native';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { RootStackParamList } from '../navigation/AppNavigator';
 import { useVote } from '../hooks/useVote';
+import { useTypedRoute } from '../hooks/useTypedRoute';
 import { VoteButton } from '../components/VoteButton';
 import { RankBadge } from '../components/RankBadge';
 import { RiskTag } from '../components/RiskTag';
 import { colors } from '../theme';
 import { spacing, borderRadius, typography } from '../theme';
 import { formatVoteCount, formatDate } from '../utils/formatters';
+import { buildEntryDeepLink } from '../utils/constants';
 import * as api from '../services/api';
 
 export function DetailScreen() {
-  const navigation = useNavigation<any>();
-  const route = useRoute<any>();
-  const entryId = route?.params?.entryId ?? 0;
-  const { cast, voteRestriction, isLoading: voteLoading, error: voteError } = useVote();
-
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const route = useTypedRoute<'Detail'>();
+  const entryId = route.params.entryId;
   const [entry, setEntry] = useState<any>(null);
   const [entryLoading, setEntryLoading] = useState(true);
   const [myRank, setMyRank] = useState<number | null>(null);
+  const { cast, voteRestriction, isLoading: voteLoading, error: voteError } = useVote(entry?.activity_id);
 
   useEffect(() => {
     if (entryId) {
       setEntryLoading(true);
-      api.apiClient.get(`/entries/${entryId}`)
-        .then((res) => {
-          setEntry(res.data?.data ?? res.data);
+      api.getEntryDetail(entryId)
+        .then((data) => {
+          setEntry(data?.data ?? data ?? null);
         })
         .catch(() => setEntry(null))
         .finally(() => setEntryLoading(false));
@@ -56,10 +59,12 @@ export function DetailScreen() {
 
   const handleShare = async () => {
     if (!entry) return;
+    const deepLink = buildEntryDeepLink(entry.id);
     try {
       await Share.share({
         title: entry.title || '我的蛋糕设计',
-        message: `快来为我的蛋糕设计投票！作品：${entry.title || '我的蛋糕'}，当前排名 #${entry.rank || '-'}, 得票 ${entry.valid_vote_count || 0}`,
+        message: `快来为我的蛋糕设计投票！作品：${entry.title || '我的蛋糕'}，当前排名 #${entry.rank || '-'}, 得票 ${entry.valid_vote_count || 0}\n${deepLink}`,
+        url: deepLink,
       });
     } catch {}
   };
@@ -96,11 +101,11 @@ export function DetailScreen() {
       <View style={styles.infoSection}>
         <View style={styles.titleRow}>
           <Text style={styles.title}>{entry.title || `作品 #${entry.id}`}</Text>
-          {entry.rank && <RankBadge rank={entry.rank} />}
+          {entry.rank != null && <RankBadge rank={entry.rank} />}
         </View>
         <View style={styles.metaRow}>
           <Text style={styles.voteCount}>{formatVoteCount(entry.valid_vote_count ?? 0)} 有效票</Text>
-          {entry.ai_generated && <RiskTag level="medium" label="AI生成" />}
+          {entry.image_url && <RiskTag level="medium" label="AI生成" />}
         </View>
         <Text style={styles.time}>参赛时间: {formatDate(entry.created_at)}</Text>
         {entry.user_name && <Text style={styles.author}>作者: {entry.user_name}</Text>}
@@ -120,10 +125,16 @@ export function DetailScreen() {
         <Text style={styles.shareButtonText}>分享拉票</Text>
       </TouchableOpacity>
 
+      {!entry.is_winner && (
+        <TouchableOpacity style={styles.orderButton} onPress={() => navigation.navigate('Order', { entryId: entry.id })}>
+          <Text style={styles.orderButtonText}>我要同款蛋糕</Text>
+        </TouchableOpacity>
+      )}
+
       {entry.is_winner && (
         <View style={styles.winnerBanner}>
           <Text style={styles.winnerText}>恭喜获奖！请前往领奖页面查看核销码</Text>
-          <TouchableOpacity onPress={() => navigation.navigate('Redeem')}>
+          <TouchableOpacity onPress={() => navigation.navigate('Redeem', { code: '' })}>
             <Text style={styles.winnerLink}>查看领奖码</Text>
           </TouchableOpacity>
         </View>
@@ -218,6 +229,18 @@ const styles = StyleSheet.create({
     marginTop: spacing.md,
     marginBottom: spacing.xxl,
     alignItems: 'center',
+  },
+  orderButton: {
+    backgroundColor: colors.primary,
+    borderRadius: borderRadius.lg,
+    padding: spacing.xl,
+    alignItems: 'center',
+    marginHorizontal: spacing.xl,
+    marginTop: spacing.md,
+  },
+  orderButtonText: {
+    ...typography.button,
+    color: colors.surface,
   },
   winnerText: {
     ...typography.body,

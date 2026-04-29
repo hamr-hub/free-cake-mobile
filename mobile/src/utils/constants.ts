@@ -1,4 +1,6 @@
-export const API_BASE_URL = 'http://localhost:3000/api';
+import Config from 'react-native-config';
+
+export const API_BASE_URL = Config.API_URL || 'http://localhost:3000/api';
 export const AI_GENERATE_TIMEOUT = 30000;
 export const DEFAULT_TIMEOUT = 10000;
 export const MAX_VOTES_PER_DAY = 3;
@@ -7,6 +9,15 @@ export const MAX_RETRY_COUNT = 3;
 export const RETRY_DELAY_MS = 1000;
 export const CACHE_TTL_MS = 10000;
 export const REGION_RADIUS_KM = 10;
+export const CUSTOMER_SERVICE_PHONE = 'tel:4001234567';
+export const APPEAL_URL = 'https://free-cake.example.com/appeal';
+export const HELP_URL = 'https://free-cake.example.com/help';
+export const DEEP_LINK_SCHEME = 'freecake';
+export const UNIVERSAL_LINK_HOST = 'https://free-cake.example.com';
+
+export function buildEntryDeepLink(entryId: number): string {
+  return `${UNIVERSAL_LINK_HOST}/entry/${entryId}`;
+}
 export const REDEEM_CODE_CACHE_TTL_MS = 3600000;
 export const SUPPORTED_PLATFORMS = ['ios', 'android'] as const;
 

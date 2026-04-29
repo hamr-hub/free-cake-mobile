@@ -29,7 +29,7 @@ pub async fn settle(
         .await
         .map_err(|e| AppError::Internal(e.to_string()))?;
 
-    let activity = sqlx::query("SELECT status, max_winner_count, voting_end_at, region_id FROM activity WHERE id = $1")
+    let activity = sqlx::query("SELECT status, max_winner_count, voting_end_at, region_id FROM activity WHERE id = $1 FOR UPDATE")
         .bind(activity_id)
         .fetch_optional(&mut *tx)
         .await

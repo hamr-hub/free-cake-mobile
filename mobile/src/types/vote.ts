@@ -3,9 +3,7 @@ import { VoteStatus } from '../utils/constants';
 export interface VoteRecord {
   id: number;
   entry_id: number;
-  activity_id: number;
-  user_id: number;
-  status: VoteStatus;
+  vote_status: VoteStatus;
   created_at: string;
 }
 

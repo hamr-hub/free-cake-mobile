@@ -6,9 +6,7 @@ export interface User {
   id: number;
   phone: string;
   nickname: string;
-  region_id: number;
   region_name: string;
-  avatar_url: string;
 }
 
 export interface LoginRequest {
@@ -20,7 +18,20 @@ export interface LoginResponse {
   token: string;
   user_id: number;
   role: string;
-  region_id: number | null;
+}
+
+export interface WechatLoginResponse {
+  token?: string;
+  user_id?: number;
+  role?: string;
+  openid?: string;
+  need_bind_phone?: boolean;
+}
+
+export interface BindPhoneResponse {
+  token: string;
+  user_id: number;
+  role: string;
 }
 
 export interface SendCodeRequest {
@@ -29,7 +40,7 @@ export interface SendCodeRequest {
 
 export interface SendCodeResponse {
   success: boolean;
-  expire_in: number;
+  expires_in: number;
 }
 
 export interface UserProfile {

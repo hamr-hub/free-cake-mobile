@@ -1,5 +1,5 @@
 import React from "react";
-import { useGetIdentity, useLogout } from "@refinedev/core";
+import { useGetIdentity, useLogout, usePermissions } from "@refinedev/core";
 import { Layout as AntdLayout, Menu, Avatar, Dropdown, Typography, theme } from "antd";
 import {
   DashboardOutlined,
@@ -13,11 +13,17 @@ import {
   AppstoreOutlined,
   ShopOutlined,
   TeamOutlined,
+  BarChartOutlined,
   LogoutOutlined,
   UserOutlined,
+  DollarCircleOutlined,
+  ShoppingCartOutlined,
+  FileSearchOutlined,
+  WarningOutlined,
+  SkinOutlined,
+  ClockCircleOutlined,
 } from "@ant-design/icons";
 import { useNavigate, useLocation, Outlet } from "react-router";
-
 const { Sider, Header, Content } = AntdLayout;
 const { Text } = Typography;
 
@@ -31,18 +37,34 @@ const menuItems = [
   { key: "/production", icon: <ScheduleOutlined />, label: "排产中心" },
   { key: "/redeem", icon: <TagOutlined />, label: "核销管理" },
   { key: "/inventory", icon: <AppstoreOutlined />, label: "库存中心" },
+  { key: "/reports", icon: <BarChartOutlined />, label: "运营报表" },
+  { key: "/prices", icon: <DollarCircleOutlined />, label: "价格配置" },
+  { key: "/orders", icon: <ShoppingCartOutlined />, label: "订单管理" },
+  { key: "/templates", icon: <SkinOutlined />, label: "设计模板" },
+  { key: "/audit-log", icon: <FileSearchOutlined />, label: "审计日志" },
+  { key: "/risk-events", icon: <WarningOutlined />, label: "风控事件" },
   { key: "/stores", icon: <ShopOutlined />, label: "门店管理" },
-  { key: "/staff", icon: <TeamOutlined />, label: "人员考勤" },
+  { key: "/staff", icon: <TeamOutlined />, label: "人员考勤", children: [
+    { key: "/staff", icon: <TeamOutlined />, label: "人员列表" },
+    { key: "/staff/attendance", icon: <ClockCircleOutlined />, label: "考勤记录" },
+  ]},
 ];
+
+const operatorPages = ["/dashboard", "/entries", "/votes", "/redeem", "/production", "/staff", "/staff/attendance"];
 
 export const AdminLayout: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { data: identity } = useGetIdentity();
+  const { data: permissions } = usePermissions({ params: {} });
   const { mutate: logout } = useLogout();
   const { token: themeToken } = theme.useToken();
 
-  const selectedKey = "/" + location.pathname.split("/")[1];
+  const role = (permissions as string) || (identity as any)?.role || "operator";
+  const filteredMenuItems = role === "admin" ? menuItems : menuItems.filter((item) => operatorPages.includes(item.key));
+
+  const selectedKey = "/" + location.pathname.split("/").filter(Boolean).slice(0, 2).join("/");
+  const openKeys = ["/" + location.pathname.split("/").filter(Boolean)[0]];
 
   const userMenuItems = [
     {
@@ -84,7 +106,8 @@ export const AdminLayout: React.FC = () => {
         <Menu
           mode="inline"
           selectedKeys={[selectedKey]}
-          items={menuItems}
+          openKeys={openKeys}
+          items={filteredMenuItems}
           onClick={({ key }) => navigate(key)}
           style={{ borderRight: "none" }}
         />

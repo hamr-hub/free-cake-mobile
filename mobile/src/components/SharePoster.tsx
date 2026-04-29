@@ -1,5 +1,5 @@
 import React, { useRef } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Image } from 'react-native';
 import { captureAndShare } from '../services/share';
 import { colors } from '../theme';
 import { spacing, borderRadius, typography } from '../theme';
@@ -22,7 +22,11 @@ export function SharePoster({ entryId, title, imageUrl, shareCode }: SharePoster
     <View>
       <View ref={posterRef} style={styles.poster} collapsable={false}>
         <View style={styles.posterImage}>
-          <Text style={styles.posterImageText}>{title}</Text>
+          {imageUrl && !imageUrl.startsWith('placeholder://') ? (
+            <Image source={{ uri: imageUrl }} style={styles.posterImageImg} resizeMode="cover" />
+          ) : (
+            <Text style={styles.posterImageText}>{title}</Text>
+          )}
         </View>
         <View style={styles.posterInfo}>
           <Text style={styles.posterTitle}>{title}</Text>
@@ -49,6 +53,13 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  posterImageImg: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
   },
   posterImageText: {
     ...typography.title,

@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useTable, List } from "@refinedev/antd";
-import { useNotification } from "@refinedev/core";
+import { useNotification, useCustomMutation } from "@refinedev/core";
 import { Table, Space, Tag, Image, Button, Popconfirm, Modal, Descriptions } from "antd";
 import { CheckCircleOutlined, CloseCircleOutlined, EyeOutlined } from "@ant-design/icons";
 import { RiskTag } from "../../components/RiskTag";
@@ -27,17 +27,15 @@ export const EntryList: React.FC = () => {
   const [previewVisible, setPreviewVisible] = useState(false);
   const [previewEntry, setPreviewEntry] = useState<any>(null);
 
+  const { mutateAsync: statusMutate } = useCustomMutation();
+
   const handleStatusChange = async (entryId: number, newStatus: string) => {
     try {
-      const res = await fetch(`/api/entries/${entryId}/status`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
-        },
-        body: JSON.stringify({ status: newStatus }),
+      await statusMutate({
+        url: `/api/entries/${entryId}/status`,
+        method: "post",
+        values: { status: newStatus },
       });
-      if (!res.ok) throw new Error("操作失败");
       open?.({ type: "success", message: `作品已${newStatus === "approved" ? "通过" : "驳回"}` });
       tableQuery?.refetch();
     } catch (e: any) {

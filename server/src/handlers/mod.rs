@@ -13,3 +13,7 @@ pub mod production;
 pub mod staff_handler;
 pub mod query_handlers;
 pub mod user;
+pub mod upload;
+pub mod reports;
+pub mod template;
+pub mod price;

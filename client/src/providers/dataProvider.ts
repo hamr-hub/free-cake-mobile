@@ -17,11 +17,9 @@ async function request<T>(
   const response = await fetch(url, { ...options, headers });
 
   if (response.status === 401) {
-    localStorage.removeItem("token");
-    localStorage.removeItem("user_id");
-    localStorage.removeItem("role");
-    window.location.href = "/login";
-    throw new Error("Unauthorized");
+    const error = new Error("Unauthorized");
+    (error as any).statusCode = 401;
+    throw error;
   }
 
   if (!response.ok) {
@@ -124,7 +122,7 @@ export const dataProvider: DataProvider = {
     if (headers) options.headers = headers as Record<string, string>;
     if (payload) options.body = JSON.stringify(payload);
 
-    const data = await request<any>(requestUrl.startsWith("/") ? requestUrl : `${API_URL}/${requestUrl}`, options);
+    const data = await request<any>(requestUrl.startsWith("/") ? `${API_URL}${requestUrl}` : `${API_URL}/${requestUrl}`, options);
     return { data } as CustomResponse<any>;
   },
 

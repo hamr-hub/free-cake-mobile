@@ -7,14 +7,19 @@ import {
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
+  Alert,
 } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { RootStackParamList } from '../navigation/AppNavigator';
 import { useAuth } from '../context/AuthContext';
 import { validatePhone, validateVerifyCode } from '../utils/validators';
 import { colors } from '../theme';
 import { spacing, borderRadius, typography } from '../theme';
 
 export function LoginScreen() {
-  const { login, sendCode, isLoading, error } = useAuth();
+  const { login, wechatLogin, sendCode, isLoading, error } = useAuth();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const [phone, setPhone] = useState('');
   const [verifyCode, setVerifyCode] = useState('');
   const [codeSent, setCodeSent] = useState(false);
@@ -59,6 +64,31 @@ export function LoginScreen() {
       await login(phone, verifyCode);
     } catch {
       setLocalError(error ?? '登录失败');
+    }
+  };
+
+  const handleWechatLogin = async () => {
+    try {
+      setLocalError('');
+      // TODO: Replace with native WeChat SDK call: wx.login() → code
+      // For now, this placeholder shows the intended flow:
+      // const code = await WeChatModule.login();
+      // const result = await wechatLogin(code);
+      //
+      // If the user already has a phone bound, result.token is set
+      // and AuthContext will set isAuthenticated = true automatically.
+      //
+      // If the user is new, result.need_bind_phone = true and
+      // result.openid is set — navigate to BindPhone screen:
+      // if (result.need_bind_phone) {
+      //   navigation.navigate('BindPhone', { openid: result.openid });
+      // }
+      Alert.alert(
+        '微信登录',
+        '微信登录需要集成微信 SDK 原生模块。请配置 react-native-wechat-lib 后启用此功能。',
+      );
+    } catch {
+      setLocalError(error ?? '微信登录失败');
     }
   };
 
@@ -115,6 +145,20 @@ export function LoginScreen() {
         <Text style={styles.loginButtonText}>
           {isLoading ? '登录中...' : '登录'}
         </Text>
+      </TouchableOpacity>
+
+      <View style={styles.dividerContainer}>
+        <View style={styles.dividerLine} />
+        <Text style={styles.dividerText}>或</Text>
+        <View style={styles.dividerLine} />
+      </View>
+
+      <TouchableOpacity
+        style={styles.wechatButton}
+        onPress={handleWechatLogin}
+        disabled={isLoading}
+      >
+        <Text style={styles.wechatButtonText}>微信登录</Text>
       </TouchableOpacity>
 
       <Text style={styles.hint}>
@@ -198,6 +242,31 @@ const styles = StyleSheet.create({
   loginButtonText: {
     ...typography.button,
     color: colors.textPrimary,
+  },
+  dividerContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: spacing.lg,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: colors.divider,
+  },
+  dividerText: {
+    ...typography.caption,
+    color: colors.textHint,
+    marginHorizontal: spacing.md,
+  },
+  wechatButton: {
+    backgroundColor: '#07C160',
+    borderRadius: borderRadius.lg,
+    padding: spacing.xl,
+    alignItems: 'center',
+  },
+  wechatButtonText: {
+    ...typography.button,
+    color: '#FFFFFF',
   },
   hint: {
     ...typography.caption,

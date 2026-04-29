@@ -9,6 +9,9 @@ const KEYS = {
   REGION_ID: 'region_id',
   REDEEM_CODES: 'redeem_codes_cache',
   LAST_LOCATION: 'last_location',
+  VOTE_STATE: 'vote_state',
+  PUSH_NOTIFICATIONS: 'push_notifications',
+  RANKING_VISIBLE: 'ranking_visible',
 };
 
 export const storage = {
@@ -64,6 +67,29 @@ export const storage = {
   },
   getCachedLocation(): string | null {
     return mmkv.getString(KEYS.LAST_LOCATION) ?? null;
+  },
+
+  setVoteState(state: { usedToday: number; lastDate: string }): void {
+    mmkv.set(KEYS.VOTE_STATE, JSON.stringify(state));
+  },
+  getVoteState(): { usedToday: number; lastDate: string } | null {
+    const raw = mmkv.getString(KEYS.VOTE_STATE);
+    if (!raw) return null;
+    try { return JSON.parse(raw); } catch { return null; }
+  },
+
+  setPushNotifications(enabled: boolean): void {
+    mmkv.set(KEYS.PUSH_NOTIFICATIONS, enabled);
+  },
+  getPushNotifications(): boolean {
+    return mmkv.getBoolean(KEYS.PUSH_NOTIFICATIONS) ?? true;
+  },
+
+  setRankingVisible(visible: boolean): void {
+    mmkv.set(KEYS.RANKING_VISIBLE, visible);
+  },
+  getRankingVisible(): boolean {
+    return mmkv.getBoolean(KEYS.RANKING_VISIBLE) ?? true;
   },
 
   clearAll(): void {

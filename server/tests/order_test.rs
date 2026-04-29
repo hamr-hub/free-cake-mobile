@@ -46,7 +46,7 @@ fn test_scheduled_date_parse_invalid() {
 #[test]
 fn test_batch_and_task_ids() {
     let batch_id: i64 = 1;
-    let task_ids = vec![1, 2, 3];
+    let task_ids = [1_i64, 2, 3];
     assert_eq!(task_ids.len(), 3);
     assert!(batch_id > 0);
 }

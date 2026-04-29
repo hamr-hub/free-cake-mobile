@@ -7,26 +7,43 @@ import {
   StyleSheet,
   ActivityIndicator,
   Linking,
+  Switch,
+  Alert,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { RootStackParamList } from '../navigation/AppNavigator';
 import { useAuth } from '../context/AuthContext';
-import { getUserProfile, getRedeemDetail } from '../services/api';
+import { getUserProfile, getRedeemDetail, apiClient } from '../services/api';
+import { storage } from '../services/storage';
 import { UserProfile } from '../types/user';
 import { colors } from '../theme';
 import { spacing, borderRadius, typography } from '../theme';
 import { formatPhone, formatVoteCount, formatDate } from '../utils/formatters';
+import { CUSTOMER_SERVICE_PHONE, APPEAL_URL, HELP_URL } from '../utils/constants';
 
 export function ProfileScreen() {
   const { logout, userId } = useAuth();
-  const navigation = useNavigation<any>();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [showVoteRecords, setShowVoteRecords] = useState(false);
+  const [orders, setOrders] = useState<any[]>([]);
   const [redeemDetails, setRedeemDetails] = useState<Record<string, any>>({});
+  const [allowPushNotifications, setAllowPushNotifications] = useState(storage.getPushNotifications());
+  const [allowRankingVisible, setAllowRankingVisible] = useState(storage.getRankingVisible());
 
   useEffect(() => {
     fetchProfile();
+    fetchOrders();
   }, []);
+
+  const fetchOrders = async () => {
+    try {
+      const res = await apiClient.get('/orders/mine', { params: { page: 1, page_size: 50 } });
+      setOrders(res.data?.list ?? res.data?.data?.list ?? []);
+    } catch {}
+  };
 
   const fetchProfile = async () => {
     setIsLoading(true);
@@ -54,15 +71,15 @@ export function ProfileScreen() {
   };
 
   const handleRedeemPress = () => {
-    navigation.navigate('Redeem');
+    navigation.navigate('Redeem', { code: '' });
   };
 
   const handleCustomerService = () => {
-    Linking.openURL('tel:4001234567');
+    Linking.openURL(CUSTOMER_SERVICE_PHONE);
   };
 
   const handleAppeal = () => {
-    Linking.openURL('https://free-cake.example.com/appeal');
+    Linking.openURL(APPEAL_URL);
   };
 
   return (
@@ -146,6 +163,68 @@ export function ProfileScreen() {
         </View>
       )}
 
+      {orders.length > 0 && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>我的订单</Text>
+          {orders.map((order: any) => (
+            <TouchableOpacity
+              key={order.id}
+              style={styles.orderItem}
+              onPress={() => navigation.navigate('OrderDetail', { orderId: order.id })}
+            >
+              <View>
+                <Text style={styles.orderId}>订单 #{order.id}</Text>
+                <Text style={styles.orderType}>
+                  {order.order_type === 'paid' ? '付费' : '免费'}
+                  {order.amount > 0 ? ` · ¥${Number(order.amount).toFixed(2)}` : ''}
+                </Text>
+              </View>
+              <View style={styles.orderStatusCol}>
+                {order.pay_status && order.order_type === 'paid' && (
+                  <Text style={[styles.orderStatusTag, order.pay_status === 'paid' && styles.orderStatusPaid]}>
+                    {order.pay_status === 'paid' ? '已支付' : order.pay_status === 'pending' ? '待支付' : order.pay_status === 'closed' ? '已关闭' : order.pay_status}
+                  </Text>
+                )}
+                {order.refund_status && (
+                  <Text style={styles.orderRefundTag}>{order.refund_status === 'refunded' ? '已退款' : order.refund_status}</Text>
+                )}
+              </View>
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
+
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>隐私设置</Text>
+        <View style={styles.toggleRow}>
+          <Text style={styles.toggleLabel}>推送通知</Text>
+          <Switch
+            value={allowPushNotifications}
+            onValueChange={(v) => { setAllowPushNotifications(v); storage.setPushNotifications(v); }}
+            trackColor={{ false: colors.divider, true: colors.primary }}
+            thumbColor={colors.surface}
+          />
+        </View>
+        <View style={styles.toggleRow}>
+          <Text style={styles.toggleLabel}>排行榜展示昵称</Text>
+          <Switch
+            value={allowRankingVisible}
+            onValueChange={(v) => { setAllowRankingVisible(v); storage.setRankingVisible(v); }}
+            trackColor={{ false: colors.divider, true: colors.primary }}
+            thumbColor={colors.surface}
+          />
+        </View>
+        <TouchableOpacity style={styles.privacyButton} onPress={() => Alert.alert('数据导出', '已提交数据导出请求，稍后将通过短信发送下载链接')}>
+          <Text style={styles.privacyButtonText}>导出我的数据</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={[styles.privacyButton, styles.dangerButton]} onPress={() => Alert.alert('注销账户', '此操作不可撤销，将删除您的所有数据。确认注销？', [
+          { text: '取消', style: 'cancel' },
+          { text: '确认注销', style: 'destructive', onPress: () => { logout(); } },
+        ])}>
+          <Text style={[styles.privacyButtonText, styles.dangerText]}>注销账户</Text>
+        </TouchableOpacity>
+      </View>
+
       <View style={styles.supportSection}>
         <Text style={styles.sectionTitle}>客服与申诉</Text>
         <TouchableOpacity style={styles.supportButton} onPress={handleCustomerService}>
@@ -154,7 +233,7 @@ export function ProfileScreen() {
         <TouchableOpacity style={styles.supportButton} onPress={handleAppeal}>
           <Text style={styles.supportButtonText}>投票异常申诉</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.supportButton} onPress={() => Linking.openURL('https://free-cake.example.com/help')}>
+        <TouchableOpacity style={styles.supportButton} onPress={() => Linking.openURL(HELP_URL)}>
           <Text style={styles.supportButtonText}>常见问题</Text>
         </TouchableOpacity>
       </View>
@@ -307,6 +386,39 @@ const styles = StyleSheet.create({
   redeemUsed: {
     color: colors.success,
   },
+  orderItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.divider,
+  },
+  orderId: {
+    ...typography.body,
+    color: colors.textPrimary,
+  },
+  orderType: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    marginTop: spacing.xs,
+  },
+  orderStatusCol: {
+    alignItems: 'flex-end',
+  },
+  orderStatusTag: {
+    ...typography.caption,
+    color: colors.warning,
+    fontWeight: '600',
+  },
+  orderStatusPaid: {
+    color: colors.success,
+  },
+  orderRefundTag: {
+    ...typography.caption,
+    color: colors.danger,
+    marginTop: spacing.xs,
+  },
   supportSection: {
     backgroundColor: colors.surface,
     borderRadius: borderRadius.lg,
@@ -321,6 +433,33 @@ const styles = StyleSheet.create({
   supportButtonText: {
     ...typography.body,
     color: colors.primary,
+  },
+  toggleRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.divider,
+  },
+  toggleLabel: {
+    ...typography.body,
+    color: colors.textPrimary,
+  },
+  privacyButton: {
+    paddingVertical: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.divider,
+  },
+  privacyButtonText: {
+    ...typography.body,
+    color: colors.primary,
+  },
+  dangerButton: {
+    borderBottomWidth: 0,
+  },
+  dangerText: {
+    color: colors.danger,
   },
   logoutButton: {
     backgroundColor: colors.surface,

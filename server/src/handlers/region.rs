@@ -1,9 +1,10 @@
-use axum::{extract::{State, Path, Query}, Json};
+use axum::{extract::{State, Path, Query, Extension}, Json};
 use serde::{Deserialize, Serialize};
 use sqlx::Row;
 use crate::AppState;
 use crate::errors::AppError;
 use crate::db::models::Region;
+use crate::services::validation;
 
 #[derive(Deserialize)]
 pub struct CreateRegionRequest {
@@ -32,8 +33,11 @@ pub async fn create(
     State(state): State<AppState>,
     Json(req): Json<CreateRegionRequest>,
 ) -> Result<Json<serde_json::Value>, AppError> {
-    if req.name.is_empty() {
-        return Err(AppError::BadRequest("Region name is required".into()));
+    validation::validate_string_max(&req.name, 100, "Region name")?;
+    validation::validate_string_max(&req.province, 50, "Province")?;
+    validation::validate_string_max(&req.city, 50, "City")?;
+    if !(-90.0..=90.0).contains(&req.center_lat) || !(-180.0..=180.0).contains(&req.center_lng) {
+        return Err(AppError::BadRequest("Invalid center_lat/center_lng range".into()));
     }
 
     let radius = req.coverage_radius_km.unwrap_or(10);
@@ -137,4 +141,36 @@ pub async fn update_status(
 #[derive(Deserialize)]
 pub struct UpdateRegionStatusRequest {
     pub new_status: String,
+}
+
+#[derive(Deserialize)]
+pub struct UpdateRegionRequest {
+    pub name: Option<String>,
+    pub province: Option<String>,
+    pub city: Option<String>,
+    pub coverage_radius_km: Option<i32>,
+    pub center_lat: Option<f64>,
+    pub center_lng: Option<f64>,
+}
+
+pub async fn update(
+    State(state): State<AppState>,
+    Extension(claims): Extension<crate::app_middleware::auth::Claims>,
+    Path(id): Path<i64>,
+    Json(req): Json<UpdateRegionRequest>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    let mut builder = sqlx::QueryBuilder::<sqlx::Postgres>::new("UPDATE region SET updated_at = NOW()");
+    if let Some(ref v) = req.name { builder.push(", name = "); builder.push_bind(v); }
+    if let Some(ref v) = req.province { builder.push(", province = "); builder.push_bind(v); }
+    if let Some(ref v) = req.city { builder.push(", city = "); builder.push_bind(v); }
+    if let Some(v) = req.coverage_radius_km { builder.push(", coverage_radius_km = "); builder.push_bind(v); }
+    if let Some(v) = req.center_lat { builder.push(", center_lat = "); builder.push_bind(v); }
+    if let Some(v) = req.center_lng { builder.push(", center_lng = "); builder.push_bind(v); }
+    builder.push(" WHERE id = "); builder.push_bind(id);
+
+    builder.build().execute(&state.db_pool).await.map_err(|e| AppError::Internal(e.to_string()))?;
+
+    crate::services::audit_log::AuditLogService::log_with_pool(&state.db_pool, claims.user_id, "update", "region", id, "updated region fields").await;
+
+    Ok(Json(serde_json::json!({ "id": id })))
 }

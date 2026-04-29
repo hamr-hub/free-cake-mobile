@@ -38,6 +38,12 @@ impl RankCacheService {
             .query_async::<()>(&mut conn)
             .await
             .map_err(|e| AppError::Internal(e.to_string()))?;
+        redis::cmd("EXPIRE")
+            .arg(&key)
+            .arg(300)
+            .query_async::<()>(&mut conn)
+            .await
+            .map_err(|e| AppError::Internal(e.to_string()))?;
         Ok(())
     }
 }

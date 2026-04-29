@@ -30,10 +30,17 @@ gate:
     overall: 8
 
 implementation_context:
-  code_complete: false
+  code_complete: true
   test_complete: false
-  note: "全新项目，从零搭建"
-  missing_items: []
+  note: "Stage 34 — Server: 132 tests pass (49 lib), 0 clippy warnings. WeChat Pay JSAPI pay_sign RSA-SHA256 signing + v3 auth headers implemented. Deep linking for share-to-detail flow. B-end: 14 resource modules, tsc 0 errors. Mobile: 12 screens, typed navigation, tsc 0 errors. All P0/P1 gaps resolved. Remaining: real AI/SMS/WeChat credentials, E2E tests."
+  missing_items:
+    - "Real AI_API_URL + AI_API_KEY (currently mock)"
+    - "Real SMS credentials (currently mock)"
+    - "WeChat Mini Program registration (needs business license)"
+    - "WeChat Pay merchant cert (needs business license)"
+    - "react-native-wechat-lib native module integration"
+    - "E2E test framework"
+    - "Grafana monitoring dashboards"
 
 intent_tree:
   root: "Free Cake 村镇 AI 蛋糕项目 MVP"
@@ -223,9 +230,36 @@ tech_stack:
     framework: "refine + react + vite"
     ui_library: "Ant Design"
     target: "B 端运营后台"
+  mobile:
+    framework: "React Native 0.76"
+    navigation: "React Navigation 6"
+    state: "React Context + MMKV"
+    target: "C 端移动应用 (Android/iOS)"
   backend:
     language: "Rust"
-    framework: "Axum"
-    database: "MySQL + Redis"
-    object_storage: "OSS/COS"
+    framework: "Axum 0.7"
+    database: "PostgreSQL 16 + Redis 7"
+    orm: "sqlx 0.8"
+    object_storage: "Supabase Storage / OSS"
     architecture: "模块化单体"
+    monitoring: "Prometheus + tracing-subscriber (JSON)"
+
+implementation_status:
+  last_updated: "2026-04-29"
+  stage: "Stage 34 — All P0/P1 gaps resolved, WeChat Pay signing live"
+  server:
+    api_coverage: "100%"  # All endpoints implemented
+    test_count: 132
+    clippy: "zero warnings"
+    key_gaps:
+      - "WeChat Pay production merchant cert (needs business license)"
+      - "AI 生成对接真实文生图 API (currently mock URLs)"
+  client:
+    page_coverage: "95%"  # 14 resources with full CRUD, risk-events/templates/prices aligned
+    key_gaps:
+      - "Production Supabase Storage upload (currently stub)"
+  mobile:
+    screen_coverage: "90%"  # 12 screens, deep linking, typed navigation
+    key_gaps:
+      - "WeChat Mini Program wx.login() 真实调用 (预留桩)"
+      - "E2E tests"

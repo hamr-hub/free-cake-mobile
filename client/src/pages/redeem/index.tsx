@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useTable, List } from "@refinedev/antd";
-import { useNotification } from "@refinedev/core";
+import { useNotification, useCustomMutation } from "@refinedev/core";
 import { Table, Tag, Space, Button, Popconfirm, Card, Statistic, Row, Col, Modal, Descriptions, Input, InputNumber, Typography } from "antd";
 import { CheckCircleOutlined, RedoOutlined, SearchOutlined } from "@ant-design/icons";
 
@@ -28,18 +28,17 @@ export const RedeemList: React.FC = () => {
   const usedCount = tableProps?.dataSource?.filter?.((r: any) => r.status === "used").length || 0;
   const expiredCount = tableProps?.dataSource?.filter?.((r: any) => r.status === "expired").length || 0;
 
+  const { mutateAsync: verifyMutate } = useCustomMutation();
+  const { mutateAsync: resendMutate } = useCustomMutation();
+
   const handleVerify = async () => {
     try {
-      const res = await fetch("/api/redeem/verify", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
-        },
-        body: JSON.stringify({ redeem_code: verifyCode, phone: verifyPhone, store_id: verifyStoreId }),
+      const result = await verifyMutate({
+        url: "/api/redeem/verify",
+        method: "post",
+        values: { redeem_code: verifyCode, phone: verifyPhone, store_id: verifyStoreId },
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "核销失败");
+      const data = result?.data;
       if (data.success) {
         open?.({ type: "success", message: "核销成功", description: `订单 #${data.order_id} 已核销` });
       } else {
@@ -54,11 +53,11 @@ export const RedeemList: React.FC = () => {
 
   const handleResendCode = async (orderId: number) => {
     try {
-      const res = await fetch(`/api/orders/${orderId}/resend-code`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+      await resendMutate({
+        url: `/api/orders/${orderId}/resend-code`,
+        method: "post",
+        values: {},
       });
-      if (!res.ok) throw new Error("重发失败");
       open?.({ type: "success", message: "核销码已重发" });
       tableQuery?.refetch();
     } catch (e: any) {

@@ -1,9 +1,11 @@
-use axum::{extract::{State, Path, Query}, Json};
+use axum::{extract::{State, Path, Query, Extension}, Json};
 use serde::{Deserialize, Serialize};
 use sqlx::Row;
 use crate::AppState;
 use crate::errors::AppError;
 use crate::db::models::Store;
+use crate::app_middleware::auth::Claims;
+use crate::services::validation;
 
 #[derive(Deserialize)]
 pub struct CreateStoreRequest {
@@ -35,8 +37,14 @@ pub async fn create(
     State(state): State<AppState>,
     Json(req): Json<CreateStoreRequest>,
 ) -> Result<Json<serde_json::Value>, AppError> {
-    if req.name.is_empty() {
-        return Err(AppError::BadRequest("Store name is required".into()));
+    validation::validate_string_max(&req.name, 100, "Store name")?;
+    validation::validate_string_max(&req.address, 500, "Address")?;
+    validation::validate_phone(&req.contact_phone)?;
+    if req.daily_capacity < 0 {
+        return Err(AppError::BadRequest("daily_capacity cannot be negative".into()));
+    }
+    if !(-90.0..=90.0).contains(&req.lat) || !(-180.0..=180.0).contains(&req.lng) {
+        return Err(AppError::BadRequest("Invalid lat/lng range".into()));
     }
 
     let region_exists = sqlx::query("SELECT id FROM region WHERE id = $1 AND status = 'active'")
@@ -123,4 +131,66 @@ pub async fn show(
         .ok_or_else(|| AppError::NotFound("Store not found".into()))?;
 
     Ok(Json(store))
+}
+
+#[derive(Deserialize)]
+pub struct UpdateStoreRequest {
+    pub name: Option<String>,
+    pub region_id: Option<i64>,
+    pub address: Option<String>,
+    pub lat: Option<f64>,
+    pub lng: Option<f64>,
+    pub daily_capacity: Option<i32>,
+    pub contact_name: Option<String>,
+    pub contact_phone: Option<String>,
+}
+
+pub async fn update(
+    State(state): State<AppState>,
+    Extension(claims): Extension<crate::app_middleware::auth::Claims>,
+    Path(id): Path<i64>,
+    Json(req): Json<UpdateStoreRequest>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    let mut builder = sqlx::QueryBuilder::<sqlx::Postgres>::new("UPDATE store SET updated_at = NOW()");
+    if let Some(ref v) = req.name { builder.push(", name = "); builder.push_bind(v); }
+    if let Some(v) = req.region_id { builder.push(", region_id = "); builder.push_bind(v); }
+    if let Some(ref v) = req.address { builder.push(", address = "); builder.push_bind(v); }
+    if let Some(v) = req.lat { builder.push(", lat = "); builder.push_bind(v); }
+    if let Some(v) = req.lng { builder.push(", lng = "); builder.push_bind(v); }
+    if let Some(v) = req.daily_capacity { builder.push(", daily_capacity = "); builder.push_bind(v); }
+    if let Some(ref v) = req.contact_name { builder.push(", contact_name = "); builder.push_bind(v); }
+    if let Some(ref v) = req.contact_phone { builder.push(", contact_phone = "); builder.push_bind(v); }
+    builder.push(" WHERE id = "); builder.push_bind(id);
+
+    builder.build().execute(&state.db_pool).await.map_err(|e| AppError::Internal(e.to_string()))?;
+
+    crate::services::audit_log::AuditLogService::log_with_pool(&state.db_pool, claims.user_id, "update", "store", id, "updated store fields").await;
+
+    Ok(Json(serde_json::json!({ "id": id })))
+}
+
+#[derive(Deserialize)]
+pub struct UpdateStoreStatusRequest {
+    pub status: String,
+}
+
+pub async fn update_status(
+    State(state): State<AppState>,
+    Extension(claims): Extension<Claims>,
+    Path(id): Path<i64>,
+    Json(req): Json<UpdateStoreStatusRequest>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    if req.status != "active" && req.status != "inactive" {
+        return Err(AppError::BadRequest("Status must be active or inactive".into()));
+    }
+    sqlx::query("UPDATE store SET status = $1 WHERE id = $2")
+        .bind(&req.status)
+        .bind(id)
+        .execute(&state.db_pool)
+        .await
+        .map_err(|e| AppError::Internal(e.to_string()))?;
+
+    crate::services::audit_log::AuditLogService::log_with_pool(&state.db_pool, claims.user_id, "store_status_update", "store", id, &format!("status={}", req.status)).await;
+
+    Ok(Json(serde_json::json!({ "id": id, "status": req.status })))
 }

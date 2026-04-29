@@ -6,7 +6,7 @@ import { formatVoteCount, formatRank } from '../utils/formatters';
 
 interface CakeCardProps {
   title: string;
-  imageUrl: string;
+  imageUrl: string | null;
   voteCount: number;
   rank: number;
   onPress: () => void;

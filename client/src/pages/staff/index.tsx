@@ -23,3 +23,6 @@ export const StaffList: React.FC = () => {
 };
 
 export { StaffCreate } from "./create";
+export { StaffEdit } from "./edit";
+export { StaffAttendance } from "./attendance";
+export { StaffShow } from "./show";

@@ -4,14 +4,15 @@ export interface ContestEntry {
   id: number;
   activity_id: number;
   user_id: number;
+  user_name: string;
   title: string;
-  image_url: string;
-  template_id: number;
-  generation_id: number;
-  vote_count: number;
+  image_url: string | null;
+  selected_generation_id: number;
+  selected_template_id: number;
   valid_vote_count: number;
   rank: number;
   is_winner: boolean;
+  status: string;
   created_at: string;
   share_code: string;
 }
@@ -44,7 +45,7 @@ export interface EntrySubmitResponse {
 export interface RankedEntry {
   id: number;
   title: string;
-  image_url: string;
+  image_url: string | null;
   user_name: string;
   valid_vote_count: number;
   rank: number;

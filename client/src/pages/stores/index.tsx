@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { useTable, List } from "@refinedev/antd";
+import { useCustom } from "@refinedev/core";
 import { Table, Tag, Button, Modal, Row, Col, Card, Statistic } from "antd";
 import { InboxOutlined } from "@ant-design/icons";
 
@@ -23,30 +24,29 @@ const deviceStatusColor: Record<string, string> = {
 
 export const StoreList: React.FC = () => {
   const { tableProps } = useTable({ resource: "stores" });
-  const [inventoryVisible, setInventoryVisible] = useState(false);
-  const [inventoryData, setInventoryData] = useState<any[]>([]);
-  const [inventoryLoading, setInventoryLoading] = useState(false);
-  const [selectedStore, setSelectedStore] = useState<any>(null);
-
   const dataSource = tableProps?.dataSource || [];
   const activeCount = dataSource.filter((r: any) => r.status === "active").length;
   const totalCapacity = dataSource.reduce((sum: number, r: any) => sum + (r.daily_capacity || 0), 0);
 
-  const showStoreInventory = async (store: any) => {
+  const [inventoryVisible, setInventoryVisible] = useState(false);
+  const [selectedStore, setSelectedStore] = useState<any>(null);
+  const [selectedStoreId, setSelectedStoreId] = useState<number | null>(null);
+
+  const { query: inventoryQuery } = useCustom({
+    url: `/api/stores/${selectedStoreId || 0}/inventory`,
+    method: "get",
+    queryOptions: { enabled: !!selectedStoreId && inventoryVisible },
+  });
+  const inventoryData = (() => {
+    const raw = inventoryQuery.data?.data;
+    return Array.isArray(raw?.data) ? raw.data : Array.isArray(raw) ? raw : [];
+  })();
+  const inventoryLoading = inventoryQuery.isFetching;
+
+  const showStoreInventory = (store: any) => {
     setSelectedStore(store);
+    setSelectedStoreId(store.id);
     setInventoryVisible(true);
-    setInventoryLoading(true);
-    try {
-      const res = await fetch(`/api/stores/${store.id}/inventory`, {
-        headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
-      });
-      const data = await res.json();
-      setInventoryData(Array.isArray(data?.data) ? data.data : Array.isArray(data) ? data : []);
-    } catch {
-      setInventoryData([]);
-    } finally {
-      setInventoryLoading(false);
-    }
   };
 
   return (
@@ -120,3 +120,5 @@ export const StoreList: React.FC = () => {
 };
 
 export { StoreCreate } from "./create";
+export { StoreEdit } from "./edit";
+export { StoreShow } from "./show";

@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { useTable, List } from "@refinedev/antd";
-import { useNotification } from "@refinedev/core";
+import { useNotification, useCustom, useCustomMutation } from "@refinedev/core";
 import { Table, Tag, Statistic, Row, Col, Card, Button, Popconfirm, Space, InputNumber, Modal, Descriptions, Tabs, Timeline, Alert, Typography, Spin } from "antd";
 import { UnlockOutlined, MinusCircleOutlined, EyeOutlined, WarningOutlined, StopOutlined, ReloadOutlined } from "@ant-design/icons";
 import ReactECharts from "echarts-for-react";
@@ -28,38 +28,33 @@ export const RiskControlPage: React.FC = () => {
   const [deductModalVisible, setDeductModalVisible] = useState(false);
   const [deductEntry, setDeductEntry] = useState<any>(null);
   const [deductCount, setDeductCount] = useState(1);
-  const [riskEvents, setRiskEvents] = useState<any[]>([]);
-  const [eventsLoading, setEventsLoading] = useState(false);
   const [selectedVotes, setSelectedVotes] = useState<number[]>([]);
   const [bulkModalVisible, setBulkModalVisible] = useState(false);
   const [bulkAction, setBulkAction] = useState<"freeze" | "unfreeze" | "invalidate">("freeze");
 
-  const dataSource = tableProps?.dataSource || [];
+  const { query: riskEventsQuery } = useCustom({
+    url: "/api/risk-events?limit=50",
+    method: "get",
+  });
+  const riskEvents = (() => {
+    const raw = riskEventsQuery.data?.data;
+    return Array.isArray(raw?.data) ? raw.data : Array.isArray(raw) ? raw : [];
+  })();
+  const eventsLoading = riskEventsQuery.isLoading;
 
-  useEffect(() => {
-    setEventsLoading(true);
-    fetch("/api/risk-events?limit=50", {
-      headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
-    })
-      .then((res) => res.json())
-      .then((data) => {
-        setRiskEvents(Array.isArray(data?.data) ? data.data : Array.isArray(data) ? data : []);
-      })
-      .catch(() => setRiskEvents([]))
-      .finally(() => setEventsLoading(false));
-  }, []);
+  const { mutateAsync: freezeMutate } = useCustomMutation();
+  const { mutateAsync: deductMutate } = useCustomMutation();
+  const { mutateAsync: bulkMutate } = useCustomMutation();
+
+  const dataSource = tableProps?.dataSource || [];
 
   const handleFreeze = async (entryId: number, freeze: boolean) => {
     try {
-      const res = await fetch(`/api/entries/${entryId}/freeze`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
-        },
-        body: JSON.stringify({ freeze }),
+      await freezeMutate({
+        url: `/api/entries/${entryId}/freeze`,
+        method: "post",
+        values: { freeze },
       });
-      if (!res.ok) throw new Error("操作失败");
       open?.({ type: "success", message: freeze ? "作品已冻结" : "作品已解冻" });
       tableQuery?.refetch();
     } catch (e: any) {
@@ -70,15 +65,11 @@ export const RiskControlPage: React.FC = () => {
   const handleDeduct = async () => {
     if (!deductEntry) return;
     try {
-      const res = await fetch(`/api/entries/${deductEntry.id}/deduct`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
-        },
-        body: JSON.stringify({ count: deductCount, reason: "运营扣减异常票" }),
+      await deductMutate({
+        url: `/api/entries/${deductEntry.id}/deduct`,
+        method: "post",
+        values: { count: deductCount, reason: "运营扣减异常票" },
       });
-      if (!res.ok) throw new Error("扣减失败");
       open?.({ type: "success", message: `成功扣减 ${deductCount} 票` });
       setDeductModalVisible(false);
       tableQuery?.refetch();
@@ -91,16 +82,12 @@ export const RiskControlPage: React.FC = () => {
     if (selectedVotes.length === 0) return;
     try {
       const endpoint = bulkAction === "freeze" ? "freeze" : bulkAction === "unfreeze" ? "unfreeze" : "invalidate";
-      const res = await fetch(`/api/votes/bulk/${endpoint}`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
-        },
-        body: JSON.stringify({ vote_ids: selectedVotes }),
+      const result = await bulkMutate({
+        url: `/api/votes/bulk/${endpoint}`,
+        method: "post",
+        values: { vote_ids: selectedVotes },
       });
-      if (!res.ok) throw new Error("批量操作失败");
-      const data = await res.json();
+      const data = result?.data;
       open?.({ type: "success", message: `成功处理 ${data.affected || selectedVotes.length} 条投票` });
       setSelectedVotes([]);
       setBulkModalVisible(false);

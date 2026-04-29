@@ -1,5 +1,7 @@
 # 技术方案
 
+> **版本**: v2.0 | **更新日期**: 2026-04-28 | **变更摘要**: 同步实际技术栈（Rust/Axum 替代 Java/Node.js），标注各模块生产就绪度
+
 ## 一、建设目标
 构建一套支持多村镇赛区统一运营的云端中台系统，并连接村镇履约节点，完成用户参与、AI 设计、投票风控、Top100 结算、生产调度、核销自提、数据回流全流程。
 
@@ -36,30 +38,37 @@
 - 设备网关
 - ROS2 / 打印机 / 烤箱等设备控制接口
 
-## 三、推荐技术栈
-### 1. 前端
-- C 端：微信小程序 + H5
-- B 端：React + Ant Design
+## 三、实际技术栈（已落地）
 
-### 2. 后端
-- Java Spring Boot 或 Node.js NestJS
-- 核心原则：模块化单体优先，避免首期微服务过度设计
+> 以下为代码实际实现，与原始建议（Java/Node.js + MySQL）不同。
+
+### 1. 后端服务
+- **语言/框架**: Rust + Axum 0.7 + Tower 中间件
+- **数据库**: PostgreSQL 16（sqlx 0.8 + migrate，Supabase 兼容）
+- **缓存**: Redis 7（排行榜缓存、限流、幂等控制）
+- **认证**: JWT + SHA-256 手机号哈希 + RBAC 三级角色
+- **日志**: tracing 框架（结构化 JSON 输出）
+
+### 2. 前端
+- **C 端**: React Native 0.76.3 + TypeScript（跨平台 App）
+- **B 端**: React 18 + Refine 5 + Ant Design 5 + TypeScript + Vite 6
+- **图表**: ECharts 6 + echarts-for-react
 
 ### 3. 数据层
-- MySQL：事务数据
-- Redis：缓存、限流、排行榜加速、幂等控制
-- OSS / COS：图片与活动素材
+- PostgreSQL 16：事务数据（sqlx 异步连接池，最大 10 连接）
+- Redis 7：缓存、限流、排行榜加速、幂等控制
+- Supabase Storage：图片与活动素材上传（REST API）
 
 ### 4. AI 能力
-- 接入文生图模型 API
-- 增加提示词模板、尺寸限制、风格白名单、敏感词过滤
-- 首期生成结果只作为“设计参考图”，最终履约以可生产模板映射为准
+- **现状**: mock 模式（AI_API_URL 为空时返回 placeholder URL）
+- **目标**: 接入国内文生图 API（通义万相 / MidJourney API）
+- **约束**: 提示词模板标准化 + 尺寸限制 + 风格白名单 + 敏感词过滤 + 内容安全审核
+- **首期**: 生成结果仅作为”设计参考图”，最终履约以可生产模板映射为准
 
 ### 5. 设备层
-- 门店侧提供设备网关服务
-- 云端只下发结构化生产指令
-- 设备执行状态通过 MQTT / WebSocket / HTTP 回传
-- 首期保留人工确认开关，避免云端误调度直接触发生产事故
+- **现状**: 仅 API 层面下发结构化生产指令，未对接实际设备
+- **目标**: 门店侧提供设备网关服务，云端只下发生产任务 JSON
+- **首期**: 保留人工确认开关，避免云端误调度直接触发生产事故
 
 ## 四、核心模块设计
 ### 1. 活动中心
@@ -269,3 +278,115 @@ Top100 → 奖励订单 → 排产 → 生成生产批次 → 门店执行 / 设
 - 免费用户转付费率
 - 单节点产能利用率
 - 单期活动毛利 / 获客成本
+
+## 十一、生产就绪度评估（2026-04-28 审计，同日修复更新）
+
+### 后端服务 — 关键阻断项
+
+| 问题 | 严重度 | 状态 |
+|------|--------|------|
+| JWT_SECRET 默认值 `dev-secret` | **致命** | ✅ 已修复：启动时若为默认值则 panic |
+| CORS 默认允许所有源 | **致命** | ✅ 已修复：生产模式空值则 panic + 启动警告 |
+| DATABASE_URL 默认硬编码密码 | **致命** | ✅ 已修复：生产模式默认凭证则 panic |
+| SMS 为 stub（仅日志） | **阻断** | ✅ 已修复：集成阿里云/腾讯云短信（SMS_PROVIDER 环境变量切换） |
+| AI 生成默认返回 placeholder | **阻断** | ✅ 已修复：集成通义万相/OpenAI 兼容接口（AI_PROVIDER 环境变量切换，含异步轮询） |
+| 文件上传默认返回 placeholder | **阻断** | ⬜ 待配置：需真实 SUPABULE_URL/KEY |
+| 风控维度依赖客户端上报 | **严重** | ✅ 部分修复：IP 从 X-Forwarded-For 提取；device/geohash 仍需客户端 |
+| 无外键约束 | **高** | ⬜ 待迁移 |
+| 无请求体大小限制 | **高** | ✅ 已修复：1MB 限制中间件 |
+| 无优雅关机 | **高** | ✅ 已修复：with_graceful_shutdown + SIGINT |
+| 无健康检查端点 | **高** | ✅ 已修复：/api/health |
+| 无生产配置校验 | **高** | ✅ 已修复：APP_ENV=production 时校验 3 项 |
+| 手机号明文存储 | **中** | ✅ 已修复：AES-256-GCM 加密 + SHA-256 哈希 |
+| Redis 分布式锁 DEL 竞态 | **中** | ✅ 已修复：Lua script compare-and-delete |
+| AI 提示词注入风险 | **中** | ✅ 已修复：sanitize 过滤 + 长度截断 |
+| winner_list 查询参数重复绑定 | **中** | ✅ 已修复：移除 push_bind 后多余的 .bind() |
+| 报表 redeem_rate/conversion_rate 不响应过滤 | **中** | ✅ 已修复：QueryBuilder 加入 date/region 条件 |
+| 生产任务缺少 start 接口 | **中** | ✅ 已修复：新增 POST /production/tasks/:id/start |
+| enable_auto_settle 配置项无实际调用 | **低** | ✅ 已修复：移除死代码 |
+| NotificationService 仅日志 | **低** | ⬜ 待集成：需微信模板消息/推送 |
+
+### B 端管理后台 — 关键阻断项
+
+| 问题 | 严重度 | 状态 |
+|------|--------|------|
+| 无路由级权限守卫 | **严重** | ✅ 已修复：RoleGuard 组件 |
+| 8 个页面使用 raw fetch() | **高** | ✅ 已修复：全部 23 个 fetch 替换为 useCustom/useCustomMutation |
+| 活动 edit 表单日期字段映射错误 | **高** | ✅ 已修复：字段名对齐 create + onFinish ISO 转换 |
+| 库存操作非原子 | **中** | ✅ 已修复：服务端 DB 事务 create_txn |
+| 零测试覆盖 | **中** | ✅ 已添加：54 个单元测试全部通过 |
+| 考勤页只读无操作 | **低** | ⬜ 待添加 |
+
+### C 端移动 App — 关键阻断项
+
+| 问题 | 严重度 | 状态 |
+|------|--------|------|
+| 无 android/ios 原生项目目录 | **阻断** | ⬜ 待创建（运行 scripts/setup-native.sh） |
+| 无 index.js 入口 | **阻断** | ✅ 已创建：index.js + app.json |
+| API_BASE_URL 硬编码 localhost | **阻断** | ⬜ 待 react-native-config |
+| 无运行时权限请求 | **高** | ✅ 已修复：location/camera/storage 权限请求 |
+| PublishScreen 发送 stub ID | **高** | ✅ 已修复：传递真实 generation_id/template_id |
+| token 刷新竞态 | **中** | ✅ 已修复：promise-based mutex，并发 401 共享同一刷新请求 |
+| useVote 状态重启丢失 | **中** | ✅ 已修复：投票状态持久化到 MMKV（usedToday + lastDate） |
+| 无错误边界组件 | **中** | ✅ 已添加：ErrorBoundary 包裹全 App |
+| 无崩溃上报/分析/推送 | **中** | ✅ 桩已添加：crashReporter stub，待配置 Sentry DSN |
+
+### 三端共同缺失
+
+| 能力 | 严重度 | 状态 |
+|------|--------|------|
+| 微信小程序版本 | 阻断 | ⬜ 待开发（需开放平台注册） |
+| 微信登录（OpenID 绑定） | 阻断 | ✅ 已实现：POST /auth/wechat-login + /auth/bind-phone |
+| 支付集成 | 阻断 | ⬜ 待申请商户号+集成（数据库迁移已就绪） |
+| 后台定时调度 | 高 | ✅ 已实现：活动状态自动流转 + 订单超时关闭 |
+| E2E 测试 | 高 | ⬜ 待搭建 |
+| 监控告警 | 高 | ⬜ 待搭建 |
+| 推送通知 | 中 | ⬜ 待集成 |
+
+## 十二、生产化修复优先级路线图（更新版）
+
+### ✅ P0 — 安全致命项（已完成）
+1. JWT_SECRET 强制校验
+2. CORS_ORIGIN + DATABASE_URL 强制校验
+3. 服务端 IP 提取（X-Forwarded-For）
+4. 请求体大小限制中间件
+
+### ✅ P1 — 核心业务集成（已完成）
+5. 阿里云/腾讯云短信服务集成
+6. AI 文生图 API 集成（通义万相 + OpenAI 兼容）
+
+### ✅ P1 — 客户端阻断修复（已完成）
+7. B 端 RoleGuard 路由权限守卫
+8. B 端全量 raw fetch() 替换为 Refine hooks
+9. B 端活动 edit 日期字段对齐
+10. 移动端 PublishScreen 真实 ID 传递
+
+### P2 — 生产稳定性（大部分完成）
+11. 健康检查端点 /api/health ✅
+12. 优雅关机 ✅
+13. 安全响应头中间件 ✅
+14. DB 外键约束迁移 ⬜
+15. Redis 分布式锁 Lua script ✅
+16. B 端库存操作原子化 ✅
+17. 移动端 token 刷新互斥锁 ✅
+18. 移动端错误边界 + 崩溃上报 ✅（crashReporter stub 待接入 Sentry）
+19. 手机号 AES-256 加密存储 ✅
+20. 服务端单元测试 ✅（83 个测试通过）
+21. winner_list 查询参数绑定修复 ✅
+22. 报表过滤修复 ✅
+23. 生产任务 start 接口 ✅
+24. DesignTemplate CRUD API ✅
+25. 微信 OpenID 认证端点 ✅
+26. 后台定时调度器 ✅
+27. 支付数据库迁移 ✅（004_payment_schema.sql）
+28. 投票状态 MMKV 持久化 ✅
+
+### P3 — 规模化准备（2-4 周）
+29. 微信小程序开发（C 端主入口）
+30. 微信支付集成（需商户号）
+31. 推送通知
+32. 监控告警
+33. E2E 测试
+34. 门店端小程序开发
+35. 移动端原生项目创建（运行 setup-native.sh）
+36. 价格配置 CRUD + B 端管理页

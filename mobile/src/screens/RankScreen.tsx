@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, FlatList, TouchableOpacity, StyleSheet, RefreshControl, Modal, ScrollView } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { RootStackParamList } from '../navigation/AppNavigator';
 import { useAuth } from '../context/AuthContext';
 import { useActivity } from '../hooks/useActivity';
 import { getRankList } from '../services/api';
@@ -13,7 +15,7 @@ import { spacing, borderRadius, typography } from '../theme';
 export function RankScreen() {
   const { regionId, userId } = useAuth();
   const { currentActivity } = useActivity();
-  const navigation = useNavigation<any>();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const [entries, setEntries] = useState<RankedEntry[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [page, setPage] = useState(1);

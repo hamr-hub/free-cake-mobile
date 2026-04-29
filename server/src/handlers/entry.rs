@@ -4,8 +4,7 @@ use sqlx::Row;
 use crate::AppState;
 use crate::errors::AppError;
 use crate::app_middleware::auth::Claims;
-use crate::services::audit_log::AuditLogService;
-use crate::services::ai_generator::AiGeneratorService;
+use crate::services::{audit_log::AuditLogService, ai_generator::AiGeneratorService, validation};
 
 #[derive(Deserialize)]
 pub struct GenerateRequest {
@@ -74,7 +73,7 @@ pub async fn generate(
         return Err(AppError::RateLimited("AI generation rate limit exceeded".into()));
     }
 
-    let (images, template_ids) = AiGeneratorService::generate_cake_images(
+    let (images, template_ids, _ai_generation_id) = AiGeneratorService::generate_cake_images(
         &state.config.ai_api_url,
         &state.config.ai_api_key,
         &req.scene,
@@ -105,8 +104,26 @@ pub async fn generate(
     .await
     .map_err(|e| AppError::Internal(e.to_string()))?;
 
+    let generation_id = row.get::<i64, _>("id");
+
+    // Create design_template rows so users can pick from 5 templates
+    for (idx, image_url) in images.iter().enumerate() {
+        let _ = sqlx::query(
+            "INSERT INTO design_template (name, image_url, cake_size, cream_type, decoration_params, producible_level, status) \
+             VALUES ($1, $2, $3, $4, $5, $6, 'active') ON CONFLICT DO NOTHING"
+        )
+        .bind(format!("AI生成模板 #{}-{}", generation_id, idx + 1))
+        .bind(image_url)
+        .bind(&req.style)
+        .bind(&req.color_preference)
+        .bind(format!("{{\"scene\":\"{}\",\"theme\":\"{}\"}}", req.scene, req.theme))
+        .bind("high")
+        .execute(&state.db_pool)
+        .await;
+    }
+
     Ok(Json(GenerateResponse {
-        generation_id: row.get::<i64, _>("id"),
+        generation_id,
         images,
         template_ids,
     }))
@@ -118,6 +135,10 @@ pub async fn submit(
     Path(activity_id): Path<i64>,
     Json(req): Json<SubmitEntryRequest>,
 ) -> Result<Json<SubmitEntryResponse>, AppError> {
+    if req.selected_generation_id <= 0 {
+        return Err(AppError::BadRequest("selected_generation_id is required".into()));
+    }
+    validation::validate_string_max(&req.title, 100, "title")?;
     let activity = sqlx::query("SELECT status, region_id FROM activity WHERE id = $1")
         .bind(activity_id)
         .fetch_optional(&state.db_pool)
@@ -272,4 +293,62 @@ pub async fn deduct_votes(
     AuditLogService::log_with_pool(&state.db_pool, claims.user_id, "votes_deducted", "contest_entry", entry_id, &format!("deducted={}, reason={}, before={}, after={}", req.count, req.reason, current_votes, new_votes)).await;
 
     Ok(Json(serde_json::json!({ "id": entry_id, "valid_vote_count": new_votes, "deducted": req.count })))
+}
+
+#[derive(Serialize)]
+pub struct EntryDetail {
+    pub id: i64,
+    pub activity_id: i64,
+    pub user_id: i64,
+    pub user_name: String,
+    pub title: String,
+    pub image_url: Option<String>,
+    pub selected_generation_id: i64,
+    pub selected_template_id: i64,
+    pub share_code: String,
+    pub valid_vote_count: i32,
+    pub rank: i32,
+    pub is_winner: bool,
+    pub status: String,
+    pub created_at: Option<chrono::DateTime<chrono::Utc>>,
+}
+
+pub async fn show(
+    State(state): State<AppState>,
+    Path(entry_id): Path<i64>,
+) -> Result<Json<EntryDetail>, AppError> {
+    let row = sqlx::query(
+        r#"SELECT e.id, e.activity_id, e.user_id, COALESCE(u.nickname, '用户') AS user_name,
+           COALESCE(e.title, '') as title, e.image_url,
+           e.selected_generation_id, COALESCE(e.selected_template_id, 0) as selected_template_id,
+           COALESCE(e.share_code, '') as share_code, COALESCE(e.valid_vote_count, 0) as valid_vote_count,
+           RANK() OVER (ORDER BY e.valid_vote_count DESC) AS rank,
+           EXISTS(SELECT 1 FROM winner_record w WHERE w.entry_id = e.id) AS is_winner,
+           COALESCE(e.status, 'active') as status, e.created_at
+           FROM contest_entry e
+           LEFT JOIN app_user u ON e.user_id = u.id
+           WHERE e.id = $1"#
+    )
+    .bind(entry_id)
+    .fetch_optional(&state.db_pool)
+    .await
+    .map_err(|e| AppError::Internal(e.to_string()))?
+    .ok_or_else(|| AppError::NotFound("Entry not found".into()))?;
+
+    Ok(Json(EntryDetail {
+        id: row.get("id"),
+        activity_id: row.get("activity_id"),
+        user_id: row.get("user_id"),
+        user_name: row.get("user_name"),
+        title: row.get("title"),
+        image_url: row.get("image_url"),
+        selected_generation_id: row.get("selected_generation_id"),
+        selected_template_id: row.get("selected_template_id"),
+        share_code: row.get("share_code"),
+        valid_vote_count: row.get("valid_vote_count"),
+        rank: row.get("rank"),
+        is_winner: row.get("is_winner"),
+        status: row.get("status"),
+        created_at: row.get("created_at"),
+    }))
 }

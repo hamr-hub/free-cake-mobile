@@ -1,4 +1,5 @@
-use axum::{extract::{State, Query}, Json};
+use axum::{extract::{State, Path, Query}, Json};
+use chrono::TimeZone;
 use serde::{Deserialize, Serialize};
 use crate::AppState;
 use crate::errors::AppError;
@@ -8,6 +9,10 @@ use crate::db::models::AuditLog;
 pub struct AuditLogQuery {
     pub target_type: Option<String>,
     pub target_id: Option<i64>,
+    pub operator_id: Option<i64>,
+    pub action: Option<String>,
+    pub start_date: Option<String>,
+    pub end_date: Option<String>,
     pub page: Option<i64>,
     pub page_size: Option<i64>,
 }
@@ -41,6 +46,40 @@ pub async fn list(
         count_builder.push(" AND target_id = ");
         count_builder.push_bind(tid);
     }
+    if let Some(oid) = params.operator_id {
+        query_builder.push(" AND operator_id = ");
+        query_builder.push_bind(oid);
+        count_builder.push(" AND operator_id = ");
+        count_builder.push_bind(oid);
+    }
+    if let Some(ref a) = params.action {
+        query_builder.push(" AND action = ");
+        query_builder.push_bind(a);
+        count_builder.push(" AND action = ");
+        count_builder.push_bind(a);
+    }
+    if let Some(ref sd) = params.start_date {
+        if let Ok(naive) = sd.parse::<chrono::NaiveDate>() {
+            let start_dt = naive.and_hms_opt(0, 0, 0)
+                .ok_or_else(|| AppError::BadRequest("Invalid start_date".into()))?;
+            let start = chrono::Utc.from_utc_datetime(&start_dt);
+            query_builder.push(" AND created_at >= ");
+            query_builder.push_bind(start);
+            count_builder.push(" AND created_at >= ");
+            count_builder.push_bind(start);
+        }
+    }
+    if let Some(ref ed) = params.end_date {
+        if let Ok(naive) = ed.parse::<chrono::NaiveDate>() {
+            let end_dt = naive.and_hms_opt(23, 59, 59)
+                .ok_or_else(|| AppError::BadRequest("Invalid end_date".into()))?;
+            let end = chrono::Utc.from_utc_datetime(&end_dt);
+            query_builder.push(" AND created_at <= ");
+            query_builder.push_bind(end);
+            count_builder.push(" AND created_at <= ");
+            count_builder.push_bind(end);
+        }
+    }
 
     query_builder.push(" ORDER BY created_at DESC LIMIT ");
     query_builder.push_bind(page_size);
@@ -58,6 +97,20 @@ pub async fn list(
         .map_err(|e| AppError::Internal(e.to_string()))?;
 
     Ok(Json(AuditLogListResponse { list, total }))
+}
+
+pub async fn show_audit_log(
+    State(state): State<AppState>,
+    Path(id): Path<i64>,
+) -> Result<Json<AuditLog>, AppError> {
+    let record = sqlx::query_as::<_, AuditLog>("SELECT * FROM audit_log WHERE id = $1")
+        .bind(id)
+        .fetch_optional(&state.db_pool)
+        .await
+        .map_err(|e| AppError::Internal(e.to_string()))?
+        .ok_or_else(|| AppError::NotFound("Audit log not found".into()))?;
+
+    Ok(Json(record))
 }
 
 #[derive(Deserialize)]
@@ -110,6 +163,8 @@ pub async fn send_verify_code(
         .query_async::<()>(&mut conn)
         .await
         .map_err(|e| AppError::Internal(e.to_string()))?;
+
+    state.sms_service.send_verify_code(&req.phone, &code).await?;
 
     Ok(Json(SendVerifyCodeResponse { success: true, expires_in }))
 }
@@ -194,10 +249,14 @@ pub struct WinnerWithOrder {
     pub rank: i32,
     pub valid_vote_count: i32,
     pub status: String,
-    pub created_at: String,
+    pub created_at: chrono::DateTime<chrono::Utc>,
     pub store_id: i64,
     pub production_status: String,
     pub redeem_status: String,
+    pub order_type: Option<String>,
+    pub amount: Option<f64>,
+    pub pay_status: Option<String>,
+    pub refund_status: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -218,7 +277,7 @@ pub async fn winner_list(
         "SELECT COUNT(*) FROM winner_record w WHERE 1=1"
     );
     let mut query_builder = sqlx::QueryBuilder::<sqlx::Postgres>::new(
-        "SELECT w.id, w.activity_id, w.entry_id, w.user_id, w.rank, w.valid_vote_count, w.status, w.created_at, r.store_id, r.production_status, r.redeem_status FROM winner_record w LEFT JOIN reward_order r ON r.winner_id = w.id WHERE 1=1"
+        "SELECT w.id, w.activity_id, w.entry_id, w.user_id, w.rank, w.valid_vote_count, w.status, w.created_at, r.store_id, r.production_status, r.redeem_status, r.order_type, r.amount, r.pay_status, r.refund_status FROM winner_record w LEFT JOIN reward_order r ON r.winner_id = w.id WHERE 1=1"
     );
 
     if let Some(aid) = params.activity_id {
@@ -239,8 +298,6 @@ pub async fn winner_list(
         .map_err(|e| AppError::Internal(e.to_string()))?;
 
     let rows = query_builder.build()
-        .bind(page_size)
-        .bind(offset)
         .fetch_all(&state.db_pool)
         .await
         .map_err(|e| AppError::Internal(e.to_string()))?;
@@ -253,13 +310,51 @@ pub async fn winner_list(
         rank: row.get::<i32, _>("rank"),
         valid_vote_count: row.get::<i32, _>("valid_vote_count"),
         status: row.get::<String, _>("status"),
-        created_at: row.get::<String, _>("created_at"),
+        created_at: row.get::<chrono::DateTime<chrono::Utc>, _>("created_at"),
         store_id: row.get::<i64, _>("store_id"),
         production_status: row.get::<String, _>("production_status"),
         redeem_status: row.get::<String, _>("redeem_status"),
+        order_type: row.try_get::<String, _>("order_type").ok(),
+        amount: row.try_get::<f64, _>("amount").ok(),
+        pay_status: row.try_get::<String, _>("pay_status").ok(),
+        refund_status: row.try_get::<String, _>("refund_status").ok(),
     }).collect();
 
     Ok(Json(WinnerListResponse { list, total }))
+}
+
+pub async fn show_winner(
+    State(state): State<AppState>,
+    Path(id): Path<i64>,
+) -> Result<Json<WinnerWithOrder>, AppError> {
+    let row = sqlx::query(
+        "SELECT w.id, w.activity_id, w.entry_id, w.user_id, w.rank, w.valid_vote_count, w.status, w.created_at, \
+         r.store_id, r.production_status, r.redeem_status, r.order_type, r.amount, r.pay_status, r.refund_status \
+         FROM winner_record w LEFT JOIN reward_order r ON r.winner_id = w.id WHERE w.id = $1"
+    )
+    .bind(id)
+    .fetch_optional(&state.db_pool)
+    .await
+    .map_err(|e| AppError::Internal(e.to_string()))?
+    .ok_or_else(|| AppError::NotFound("Winner record not found".into()))?;
+
+    Ok(Json(WinnerWithOrder {
+        id: row.get::<i64, _>("id"),
+        activity_id: row.get::<i64, _>("activity_id"),
+        entry_id: row.get::<i64, _>("entry_id"),
+        user_id: row.get::<i64, _>("user_id"),
+        rank: row.get::<i32, _>("rank"),
+        valid_vote_count: row.get::<i32, _>("valid_vote_count"),
+        status: row.get::<String, _>("status"),
+        created_at: row.get::<chrono::DateTime<chrono::Utc>, _>("created_at"),
+        store_id: row.get::<i64, _>("store_id"),
+        production_status: row.get::<String, _>("production_status"),
+        redeem_status: row.get::<String, _>("redeem_status"),
+        order_type: row.try_get::<String, _>("order_type").ok(),
+        amount: row.try_get::<f64, _>("amount").ok(),
+        pay_status: row.try_get::<String, _>("pay_status").ok(),
+        refund_status: row.try_get::<String, _>("refund_status").ok(),
+    }))
 }
 
 use crate::db::models::ProductionTask;
@@ -400,8 +495,8 @@ pub struct EntryWithUserInfo {
     pub valid_vote_count: i32,
     pub risk_score: f64,
     pub status: String,
-    pub created_at: String,
-    pub updated_at: String,
+    pub created_at: chrono::DateTime<chrono::Utc>,
+    pub updated_at: chrono::DateTime<chrono::Utc>,
     pub user_name: String,
     pub region_name: String,
     pub ai_generated: bool,
@@ -471,8 +566,8 @@ pub async fn entry_list(
         valid_vote_count: row.get::<i32, _>("valid_vote_count"),
         risk_score: row.get::<f64, _>("risk_score"),
         status: row.get::<String, _>("status"),
-        created_at: row.get::<String, _>("created_at"),
-        updated_at: row.get::<String, _>("updated_at"),
+        created_at: row.get::<chrono::DateTime<chrono::Utc>, _>("created_at"),
+        updated_at: row.get::<chrono::DateTime<chrono::Utc>, _>("updated_at"),
         user_name: row.get::<String, _>("user_name"),
         region_name: row.get::<String, _>("region_name"),
         ai_generated: row.get::<i64, _>("selected_generation_id") > 0,
@@ -546,4 +641,18 @@ pub async fn risk_event_list(
         .map_err(|e| AppError::Internal(e.to_string()))?;
 
     Ok(Json(RiskEventListResponse { list, total }))
+}
+
+pub async fn risk_event_show(
+    State(state): State<AppState>,
+    Path(id): Path<i64>,
+) -> Result<Json<RiskEvent>, AppError> {
+    let event = sqlx::query_as::<_, RiskEvent>("SELECT * FROM risk_event WHERE id = $1")
+        .bind(id)
+        .fetch_optional(&state.db_pool)
+        .await
+        .map_err(|e| AppError::Internal(e.to_string()))?
+        .ok_or_else(|| AppError::NotFound("Risk event not found".into()))?;
+
+    Ok(Json(event))
 }

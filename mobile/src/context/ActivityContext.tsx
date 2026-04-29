@@ -1,7 +1,8 @@
-import React, { createContext, useContext, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { Activity } from '../types/activity';
 import * as api from '../services/api';
 import { useAuth } from './AuthContext';
+import { captureException } from '../services/crashReporter';
 
 interface ActivityContextType {
   currentActivity: Activity | null;
@@ -10,6 +11,7 @@ interface ActivityContextType {
   error: string | null;
   fetchCurrentActivity: () => Promise<void>;
   fetchActivities: () => Promise<void>;
+  clearError: () => void;
 }
 
 const ActivityContext = createContext<ActivityContextType>({
@@ -19,6 +21,7 @@ const ActivityContext = createContext<ActivityContextType>({
   error: null,
   fetchCurrentActivity: async () => {},
   fetchActivities: async () => {},
+  clearError: () => {},
 });
 
 export function ActivityProvider({ children }: { children: ReactNode }) {
@@ -28,7 +31,7 @@ export function ActivityProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchCurrentActivity = async () => {
+  const fetchCurrentActivity = useCallback(async () => {
     if (!regionId) return;
     setIsLoading(true);
     try {
@@ -38,28 +41,34 @@ export function ActivityProvider({ children }: { children: ReactNode }) {
       }
       setError(null);
     } catch (err: any) {
-      setError(err.message ?? '获取活动失败');
+      const msg = err.message ?? '获取活动失败';
+      setError(msg);
+      captureException(err, { context: 'fetchCurrentActivity' });
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [regionId]);
 
-  const fetchActivities = async () => {
+  const fetchActivities = useCallback(async () => {
     setIsLoading(true);
     try {
       const data = await api.getActivities(1, 20);
       setActivities(data.list ?? []);
       setError(null);
     } catch (err: any) {
-      setError(err.message ?? '获取活动列表失败');
+      const msg = err.message ?? '获取活动列表失败';
+      setError(msg);
+      captureException(err, { context: 'fetchActivities' });
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
+
+  const clearError = useCallback(() => setError(null), []);
 
   return (
     <ActivityContext.Provider
-      value={{ currentActivity, activities, isLoading, error, fetchCurrentActivity, fetchActivities }}
+      value={{ currentActivity, activities, isLoading, error, fetchCurrentActivity, fetchActivities, clearError }}
     >
       {children}
     </ActivityContext.Provider>

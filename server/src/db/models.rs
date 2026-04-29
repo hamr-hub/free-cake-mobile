@@ -38,6 +38,7 @@ pub struct AppUser {
     pub id: i64,
     pub phone: String,
     pub phone_hash: String,
+    pub phone_encrypted: String,
     pub open_id: String,
     pub nickname: String,
     pub region_id: Option<i64>,
@@ -97,7 +98,9 @@ pub struct DesignTemplate {
     pub cream_type: String,
     pub decoration_params: String,
     pub producible_level: String,
+    pub status: String,
     pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
 }
 
 #[derive(Debug, FromRow, Serialize, Deserialize)]
@@ -169,6 +172,17 @@ pub struct RewardOrder {
     pub store_id: i64,
     pub order_type: String,
     pub template_id: i64,
+    pub amount: f64,
+    pub pay_status: String,
+    pub pay_transaction_id: Option<String>,
+    pub paid_at: Option<DateTime<Utc>>,
+    pub closed_at: Option<DateTime<Utc>>,
+    pub refund_status: Option<String>,
+    pub refund_reason: Option<String>,
+    pub refund_txn_id: Option<String>,
+    pub refunded_at: Option<DateTime<Utc>>,
+    pub entry_id: Option<i64>,
+    pub user_id: Option<i64>,
     pub scheduled_date: Option<DateTime<Utc>>,
     pub production_status: String,
     pub redeem_status: String,
@@ -200,6 +214,9 @@ pub struct ProductionTask {
     pub started_at: Option<DateTime<Utc>>,
     pub completed_at: Option<DateTime<Utc>>,
     pub fail_reason: Option<String>,
+    pub error_description: Option<String>,
+    pub paused_at: Option<DateTime<Utc>>,
+    pub cancelled_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
 }
 

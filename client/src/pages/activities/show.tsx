@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from "react";
-import { useShow, useNotification } from "@refinedev/core";
+import React, { useState } from "react";
+import { useShow, useNotification, useCustom, useCustomMutation } from "@refinedev/core";
 import { Show } from "@refinedev/antd";
 import { Descriptions, Tag, Button, Popconfirm, Space, Row, Col, Spin, Tabs, Table, Card, Statistic } from "antd";
 import { PlayCircleOutlined, ThunderboltOutlined } from "@ant-design/icons";
@@ -49,57 +49,47 @@ export const ActivityShow: React.FC = () => {
   const record = query.data?.data;
   const isLoading = query.isLoading;
   const { open } = useNotification();
+  const { mutateAsync: postAction } = useCustomMutation();
   const [auditVisible, setAuditVisible] = useState(false);
-  const [entries, setEntries] = useState<any[]>([]);
-  const [entriesLoading, setEntriesLoading] = useState(false);
-  const [voteStats, setVoteStats] = useState<any>(null);
-  const [voteStatsLoading, setVoteStatsLoading] = useState(false);
-  const [rankList, setRankList] = useState<any[]>([]);
-  const [rankLoading, setRankLoading] = useState(false);
 
-  useEffect(() => {
-    if (!record?.id) return;
-    setEntriesLoading(true);
-    fetch(`/api/entries?activity_id=${record.id}&limit=100`, {
-      headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
-    })
-      .then((res) => res.json())
-      .then((data) => {
-        setEntries(Array.isArray(data?.data) ? data.data : Array.isArray(data) ? data : []);
-      })
-      .catch(() => setEntries([]))
-      .finally(() => setEntriesLoading(false));
+  const { query: entriesQuery } = useCustom({
+    url: `/api/entries?activity_id=${record?.id}&limit=100`,
+    method: "get",
+  });
 
-    setVoteStatsLoading(true);
-    fetch(`/api/activities/${record.id}/vote-stats`, {
-      headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
-    })
-      .then((res) => res.json())
-      .then((data) => setVoteStats(data))
-      .catch(() => setVoteStats(null))
-      .finally(() => setVoteStatsLoading(false));
+  const { query: voteStatsQuery } = useCustom({
+    url: `/api/activities/${record?.id}/votes/stats`,
+    method: "get",
+  });
 
-    setRankLoading(true);
-    fetch(`/api/activities/${record.id}/rank`, {
-      headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
-    })
-      .then((res) => res.json())
-      .then((data) => {
-        setRankList(Array.isArray(data?.data) ? data.data : Array.isArray(data) ? data : []);
-      })
-      .catch(() => setRankList([]))
-      .finally(() => setRankLoading(false));
-  }, [record?.id]);
+  const { query: rulesQuery } = useCustom({
+    url: `/api/activities/${record?.id}/rules`,
+    method: "get",
+    config: { query: { enabled: !!record?.id } },
+  });
+  const rules = (rulesQuery.data as any)?.data ?? null;
+
+  const { query: rankQuery } = useCustom({
+    url: `/api/activities/${record?.id}/rank`,
+    method: "get",
+  });
+
+  const rawEntries = entriesQuery.data?.data;
+  const displayEntries: any[] = Array.isArray(rawEntries?.data) ? rawEntries.data
+    : Array.isArray(rawEntries?.list) ? rawEntries.list
+    : Array.isArray(rawEntries) ? rawEntries : [];
+
+  const voteStats = voteStatsQuery.data?.data;
+  const rawRank = rankQuery.data?.data;
+  const rankList: any[] = Array.isArray(rawRank?.data) ? rawRank.data
+    : Array.isArray(rawRank) ? rawRank : [];
 
   const handleStatusTransition = async (newStatus: string) => {
     try {
-      await fetch(`/api/activities/${record?.id}/status`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
-        },
-        body: JSON.stringify({ new_status: newStatus }),
+      await postAction({
+        url: `/api/activities/${record?.id}/status`,
+        method: "post",
+        values: { new_status: newStatus },
       });
       open?.({ type: "success", message: "状态切换成功" });
       query.refetch();
@@ -110,16 +100,12 @@ export const ActivityShow: React.FC = () => {
 
   const handleSettle = async () => {
     try {
-      const res = await fetch(`/api/activities/${record?.id}/settle`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
-        },
-        body: JSON.stringify({ force: false }),
+      const result = await postAction({
+        url: `/api/activities/${record?.id}/settle`,
+        method: "post",
+        values: { force: false },
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "结算失败");
+      const data = result?.data;
       open?.({ type: "success", message: `结算完成：${data.winner_count} 名获奖者，${data.order_count} 个订单` });
       query.refetch();
     } catch (e: any) {
@@ -129,18 +115,12 @@ export const ActivityShow: React.FC = () => {
 
   const handleEntryStatus = async (entryId: number, newStatus: string) => {
     try {
-      await fetch(`/api/entries/${entryId}/status`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
-        },
-        body: JSON.stringify({ new_status: newStatus }),
+      await postAction({
+        url: `/api/entries/${entryId}/status`,
+        method: "post",
+        values: { new_status: newStatus },
       });
       open?.({ type: "success", message: "作品状态更新成功" });
-      setEntries((prev) =>
-        prev.map((e) => e.id === entryId ? { ...e, status: newStatus } : e)
-      );
     } catch (e: any) {
       open?.({ type: "error", message: "操作失败", description: e.message });
     }
@@ -156,17 +136,12 @@ export const ActivityShow: React.FC = () => {
         <>
           <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
             {record?.voting_end_at && record.status === "voting_open" && (
-              <Col span={24}>
-                <CountdownBanner targetTime={record.voting_end_at} label="投票截止" />
-              </Col>
+              <Col span={24}><CountdownBanner targetTime={record.voting_end_at} label="投票截止" /></Col>
             )}
             {record?.registration_end_at && record.status === "registration_open" && (
-              <Col span={24}>
-                <CountdownBanner targetTime={record.registration_end_at} label="报名截止" />
-              </Col>
+              <Col span={24}><CountdownBanner targetTime={record.registration_end_at} label="报名截止" /></Col>
             )}
           </Row>
-
           <Descriptions column={2} bordered>
             <Descriptions.Item label="ID">{record?.id}</Descriptions.Item>
             <Descriptions.Item label="活动名称">{record?.name}</Descriptions.Item>
@@ -183,7 +158,6 @@ export const ActivityShow: React.FC = () => {
             <Descriptions.Item label="获奖人数上限">{record?.max_winner_count}</Descriptions.Item>
             <Descriptions.Item label="创建时间">{record?.created_at}</Descriptions.Item>
           </Descriptions>
-
           <Space style={{ marginTop: 16 }}>
             {next && (
               <Popconfirm title={`确认切换到「${next.label}」？`} onConfirm={() => handleStatusTransition(next.status)}>
@@ -202,11 +176,11 @@ export const ActivityShow: React.FC = () => {
     },
     {
       key: "entries",
-      label: `作品列表 (${entries.length})`,
+      label: `作品列表 (${displayEntries.length})`,
       children: (
-        <Spin spinning={entriesLoading}>
+        <Spin spinning={entriesQuery.isLoading}>
           <Row gutter={[12, 12]}>
-            {entries.map((entry) => (
+            {displayEntries.map((entry: any) => (
               <Col key={entry.id} xs={24} sm={12} md={8} lg={6}>
                 <EntryCard
                   id={entry.id}
@@ -218,17 +192,13 @@ export const ActivityShow: React.FC = () => {
                   status={entry.status}
                   aiGenerated={entry.ai_generated || false}
                   onClick={(id) => {
-                    if (entry.status === "pending") {
-                      handleEntryStatus(id, "approved");
-                    }
+                    if (entry.status === "pending") handleEntryStatus(id, "approved");
                   }}
                 />
               </Col>
             ))}
-            {entries.length === 0 && !entriesLoading && (
-              <Col span={24} style={{ textAlign: "center", padding: 40, color: "#999" }}>
-                暂无参赛作品
-              </Col>
+            {displayEntries.length === 0 && !entriesQuery.isLoading && (
+              <Col span={24} style={{ textAlign: "center", padding: 40, color: "#999" }}>暂无参赛作品</Col>
             )}
           </Row>
         </Spin>
@@ -238,41 +208,41 @@ export const ActivityShow: React.FC = () => {
       key: "votes",
       label: "投票数据",
       children: (
-        <Spin spinning={voteStatsLoading || rankLoading}>
+        <Spin spinning={voteStatsQuery.isLoading || rankQuery.isLoading}>
           {voteStats && (
             <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
-              <Col span={6}>
-                <Card><Statistic title="总投票数" value={voteStats.total_votes || 0} /></Card>
-              </Col>
-              <Col span={6}>
-                <Card><Statistic title="有效票数" value={voteStats.valid_votes || 0} /></Card>
-              </Col>
-              <Col span={6}>
-                <Card><Statistic title="参与人数" value={voteStats.unique_voters || 0} /></Card>
-              </Col>
-              <Col span={6}>
-                <Card><Statistic title="风险票占比" value={voteStats.risk_ratio || 0} precision={2} suffix="%" /></Card>
-              </Col>
+              <Col span={6}><Card><Statistic title="总投票数" value={voteStats.total_votes || 0} /></Card></Col>
+              <Col span={6}><Card><Statistic title="有效票数" value={voteStats.valid_votes || 0} /></Card></Col>
+              <Col span={6}><Card><Statistic title="参与人数" value={voteStats.unique_voters || 0} /></Card></Col>
+              <Col span={6}><Card><Statistic title="风险票占比" value={voteStats.risk_ratio || 0} precision={2} suffix="%" /></Card></Col>
             </Row>
           )}
-          <Table
-            dataSource={rankList}
-            rowKey="id"
-            loading={rankLoading}
-            pagination={{ pageSize: 20 }}
-            size="small"
-          >
-            <Table.Column dataIndex="rank" title="排名" width={60} render={(v: number) => (
-              v <= 3 ? <Tag color="gold">{v}</Tag> : v
-            )} />
+          <Table dataSource={rankList} rowKey="id" loading={rankQuery.isLoading} pagination={{ pageSize: 20 }} size="small">
+            <Table.Column dataIndex="rank" title="排名" width={60} render={(v: number) => v <= 3 ? <Tag color="gold">{v}</Tag> : v} />
             <Table.Column dataIndex="entry_id" title="作品ID" width={80} />
             <Table.Column dataIndex="title" title="作品名称" ellipsis />
             <Table.Column dataIndex="vote_count" title="得票数" width={100} sorter={(a: any, b: any) => a.vote_count - b.vote_count} />
             <Table.Column dataIndex="user_name" title="作者" width={120} />
-            <Table.Column dataIndex="status" title="状态" width={80} render={(v: string) => (
-              <Tag color={entryStatusColor[v] || "default"}>{v}</Tag>
-            )} />
+            <Table.Column dataIndex="status" title="状态" width={80} render={(v: string) => <Tag color={entryStatusColor[v] || "default"}>{v}</Tag>} />
           </Table>
+        </Spin>
+      ),
+    },
+    {
+      key: "rules",
+      label: "活动规则",
+      children: (
+        <Spin spinning={rulesQuery.isLoading}>
+          {rules ? (
+            <Descriptions column={2} bordered>
+              <Descriptions.Item label="每人每天投票上限">{rules.max_votes_per_day ?? "-"}</Descriptions.Item>
+              <Descriptions.Item label="蛋糕尺寸">{rules.cake_size ?? "-"}</Descriptions.Item>
+              <Descriptions.Item label="奶油类型">{rules.cream_type ?? "-"}</Descriptions.Item>
+              <Descriptions.Item label="AI生成速率限制">{rules.decoration_params ? JSON.parse(rules.decoration_params).ai_generation_rate_limit ?? "-" : "-"}</Descriptions.Item>
+            </Descriptions>
+          ) : (
+            <div style={{ textAlign: "center", padding: 40, color: "#999" }}>暂无规则配置</div>
+          )}
         </Spin>
       ),
     },
@@ -283,7 +253,6 @@ export const ActivityShow: React.FC = () => {
       <Show isLoading={isLoading}>
         <Tabs items={tabItems} defaultActiveKey="info" />
       </Show>
-
       <AuditDrawer targetType="activity" targetId={Number(record?.id) || 0} visible={auditVisible} onClose={() => setAuditVisible(false)} />
     </Spin>
   );

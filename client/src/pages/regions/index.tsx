@@ -28,3 +28,5 @@ export const RegionList: React.FC = () => {
 };
 
 export { RegionCreate } from "./create";
+export { RegionEdit } from "./edit";
+export { RegionShow } from "./show";

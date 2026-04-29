@@ -3,17 +3,15 @@ use serde::{Deserialize, Serialize};
 use sqlx::Row;
 use crate::AppState;
 use crate::errors::AppError;
-use crate::db::models::ContestEntry;
 use crate::services::risk_control::RiskControlService;
 use crate::services::rank_cache::RankCacheService;
-use crate::app_middleware::auth::Claims;
+use crate::app_middleware::auth::{Claims, ClientIp};
 
 #[derive(Deserialize)]
 pub struct CastVoteRequest {
     pub activity_id: i64,
     pub voter_phone_hash: Option<String>,
     pub voter_device_id: Option<String>,
-    pub voter_ip: Option<String>,
     pub geohash: Option<String>,
     pub voter_openid: Option<String>,
 }
@@ -32,14 +30,26 @@ pub struct RankQuery {
 }
 
 #[derive(Serialize)]
+pub struct RankedEntry {
+    pub id: i64,
+    pub title: String,
+    pub image_url: Option<String>,
+    pub user_name: String,
+    pub valid_vote_count: i32,
+    pub rank: i32,
+    pub is_winner: bool,
+}
+
+#[derive(Serialize)]
 pub struct RankResponse {
-    pub entries: Vec<ContestEntry>,
+    pub entries: Vec<RankedEntry>,
     pub total: i64,
 }
 
 pub async fn cast(
     State(state): State<AppState>,
     Extension(claims): Extension<Claims>,
+    Extension(ClientIp(client_ip)): Extension<ClientIp>,
     Path(entry_id): Path<i64>,
     Json(req): Json<CastVoteRequest>,
 ) -> Result<Json<CastVoteResponse>, AppError> {
@@ -59,8 +69,10 @@ pub async fn cast(
         .fetch_optional(&state.db_pool)
         .await
         .map_err(|e| AppError::Internal(e.to_string()))?;
-    if entry.is_none() {
-        return Err(AppError::NotFound("Entry not found or inactive".into()));
+    let entry_row = entry.ok_or_else(|| AppError::NotFound("Entry not found or inactive".into()))?;
+    let entry_activity_id: i64 = entry_row.get("activity_id");
+    if entry_activity_id != req.activity_id {
+        return Err(AppError::BadRequest("Entry does not belong to the specified activity".into()));
     }
 
     let daily_key = format!("daily_votes:{}:{}", req.activity_id, claims.user_id);
@@ -86,7 +98,7 @@ pub async fn cast(
 
     let phone_hash = req.voter_phone_hash.as_deref().unwrap_or("");
     let device_id = req.voter_device_id.as_deref().unwrap_or("");
-    let ip = req.voter_ip.as_deref().unwrap_or("");
+    let ip = client_ip.as_str();
     let geohash = req.geohash.as_deref().unwrap_or("");
     let openid = req.voter_openid.as_deref().unwrap_or("");
 
@@ -129,7 +141,9 @@ pub async fn cast(
             .map_err(|e| AppError::Internal(e.to_string()))?;
         let valid_count: i32 = entry_row.get("valid_vote_count");
 
-        RankCacheService::update_rank_with_redis(&state.redis_client, req.activity_id, entry_id, valid_count).await?;
+        if let Err(e) = RankCacheService::update_rank_with_redis(&state.redis_client, req.activity_id, entry_id, valid_count).await {
+            tracing::warn!("Failed to update rank cache for activity {}: {}", req.activity_id, e);
+        }
     } else {
         sqlx::query("UPDATE contest_entry SET raw_vote_count = raw_vote_count + 1 WHERE id = $1")
             .bind(entry_id)
@@ -152,8 +166,8 @@ pub async fn rank(
     Path(activity_id): Path<i64>,
     Query(params): Query<RankQuery>,
 ) -> Result<Json<RankResponse>, AppError> {
-    let page = params.page.unwrap_or(1);
-    let page_size = params.page_size.unwrap_or(20);
+    let page = params.page.unwrap_or(1).max(1);
+    let page_size = params.page_size.unwrap_or(20).clamp(1, 100);
     let offset = (page - 1) * page_size;
 
     let cache_result = RankCacheService::get_rank(&state.redis_client, activity_id).await;
@@ -165,29 +179,60 @@ pub async fn rank(
     .await
     .map_err(|e| AppError::Internal(e.to_string()))?;
 
+    let rank_sql = r#"
+        SELECT e.id, e.title, e.image_url, e.valid_vote_count,
+               COALESCE(u.nickname, '匿名用户') AS user_name,
+               RANK() OVER (ORDER BY e.valid_vote_count DESC) AS rank,
+               EXISTS(SELECT 1 FROM winner_record w WHERE w.entry_id = e.id) AS is_winner
+        FROM contest_entry e
+        LEFT JOIN app_user u ON e.user_id = u.id
+        WHERE e.activity_id = $1 AND e.status = 'active'
+        ORDER BY e.valid_vote_count DESC
+        LIMIT $2 OFFSET $3
+    "#;
+
     if let Ok(cached_ids) = cache_result {
         if !cached_ids.is_empty() && page == 1 && page_size >= cached_ids.len() as i64 {
-            // Use parameterized query instead of string interpolation
-            let entries: Vec<ContestEntry> = sqlx::query_as(
-                "SELECT * FROM contest_entry WHERE id = ANY($1) AND status = 'active' ORDER BY valid_vote_count DESC"
-            )
-            .bind(cached_ids.iter().map(|(id, _)| *id).collect::<Vec<i64>>())
-            .fetch_all(&state.db_pool)
-            .await
-            .map_err(|e| AppError::Internal(e.to_string()))?;
+            let ids: Vec<i64> = cached_ids.iter().map(|(id, _)| *id).collect();
+            let rows = sqlx::query(rank_sql)
+                .bind(activity_id)
+                .bind(page_size)
+                .bind(0i64)
+                .bind(ids.as_slice())
+                .fetch_all(&state.db_pool)
+                .await
+                .map_err(|e| AppError::Internal(e.to_string()))?;
+
+            let entries = rows.iter().map(|r| RankedEntry {
+                id: r.get::<i64, _>("id"),
+                title: r.get::<String, _>("title"),
+                image_url: r.try_get::<String, _>("image_url").ok(),
+                user_name: r.get::<String, _>("user_name"),
+                valid_vote_count: r.get::<i32, _>("valid_vote_count"),
+                rank: r.get::<i32, _>("rank"),
+                is_winner: r.get::<bool, _>("is_winner"),
+            }).collect();
             return Ok(Json(RankResponse { entries, total }));
         }
     }
 
-    let entries = sqlx::query_as::<_, ContestEntry>(
-        "SELECT * FROM contest_entry WHERE activity_id = $1 AND status = 'active' ORDER BY valid_vote_count DESC LIMIT $2 OFFSET $3"
-    )
-    .bind(activity_id)
-    .bind(page_size)
-    .bind(offset)
-    .fetch_all(&state.db_pool)
-    .await
-    .map_err(|e| AppError::Internal(e.to_string()))?;
+    let rows = sqlx::query(rank_sql)
+        .bind(activity_id)
+        .bind(page_size)
+        .bind(offset)
+        .fetch_all(&state.db_pool)
+        .await
+        .map_err(|e| AppError::Internal(e.to_string()))?;
+
+    let entries = rows.iter().map(|r| RankedEntry {
+        id: r.get::<i64, _>("id"),
+        title: r.get::<String, _>("title"),
+        image_url: r.try_get::<String, _>("image_url").ok(),
+        user_name: r.get::<String, _>("user_name"),
+        valid_vote_count: r.get::<i32, _>("valid_vote_count"),
+        rank: r.get::<i32, _>("rank"),
+        is_winner: r.get::<bool, _>("is_winner"),
+    }).collect();
 
     Ok(Json(RankResponse { entries, total }))
 }

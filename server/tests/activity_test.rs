@@ -62,13 +62,18 @@ fn test_activity_valid_statuses() {
 
 #[test]
 fn test_activity_name_validation() {
-    assert!("".is_empty());
-    assert!(!"XX镇第一届蛋糕大赛".is_empty());
+    let empty_name = String::new();
+    let real_name = String::from("XX镇第一届蛋糕大赛");
+    assert!(empty_name.is_empty());
+    assert!(!real_name.is_empty());
 }
 
 #[test]
 fn test_max_winner_count_validation() {
-    assert!(0 <= 0);
-    assert!(100 > 0);
-    assert!(500 > 0);
+    let zero: i32 = 0;
+    let hundred: i32 = 100;
+    let five_hundred: i32 = 500;
+    assert!(zero <= 0);
+    assert!(hundred > 0);
+    assert!(five_hundred > 0);
 }

@@ -1,17 +1,17 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Image } from 'react-native';
 import { colors } from '../theme';
 import { spacing, borderRadius, typography } from '../theme';
 import { submitEntry } from '../services/api';
 import { SharePoster } from '../components/SharePoster';
 
 interface PublishScreenProps {
-  route?: { params?: { activityId: number; imageUrl: string; imageIndex: number } };
+  route?: { params?: { activityId: number; imageUrl: string; imageIndex: number; generationId: number; templateId: number } };
   navigation?: any;
 }
 
 export function PublishScreen({ route, navigation }: PublishScreenProps) {
-  const { activityId = 0, imageUrl = '', imageIndex = 0 } = route?.params ?? {};
+  const { activityId = 0, imageUrl = '', imageIndex = 0, generationId = 0, templateId = 0 } = route?.params ?? {};
   const [title, setTitle] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isPublished, setIsPublished] = useState(false);
@@ -28,8 +28,8 @@ export function PublishScreen({ route, navigation }: PublishScreenProps) {
     setError('');
     try {
       const data = await submitEntry(activityId as number, {
-        selected_generation_id: (imageIndex as number) + 1,
-        selected_template_id: (imageIndex as number) + 1,
+        selected_generation_id: generationId,
+        selected_template_id: templateId,
         title: title.trim(),
       });
       setEntryId(data.entry_id);
@@ -45,9 +45,13 @@ export function PublishScreen({ route, navigation }: PublishScreenProps) {
   return (
     <ScrollView style={styles.container}>
       <View style={styles.selectedImage}>
-        <View style={styles.imagePlaceholder}>
-          <Text style={styles.imagePlaceholderText}>已选择的蛋糕设计</Text>
-        </View>
+        {imageUrl && !imageUrl.startsWith('placeholder://') ? (
+          <Image source={{ uri: imageUrl }} style={styles.selectedImageImg} resizeMode="cover" />
+        ) : (
+          <View style={styles.imagePlaceholder}>
+            <Text style={styles.imagePlaceholderText}>已选择的蛋糕设计</Text>
+          </View>
+        )}
       </View>
 
       {!isPublished ? (
@@ -120,6 +124,10 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.lg,
     marginBottom: spacing.xxl,
     overflow: 'hidden',
+  },
+  selectedImageImg: {
+    flex: 1,
+    width: '100%',
   },
   imagePlaceholder: {
     flex: 1,

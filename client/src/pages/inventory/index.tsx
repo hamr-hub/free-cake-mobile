@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { useCustomMutation } from "@refinedev/core";
 import { useTable, List } from "@refinedev/antd";
 import { Table, Tag, Card, Statistic, Row, Col, Modal, Form, InputNumber, Select, Input, Button, message } from "antd";
 import { AlertOutlined, PlusOutlined, MinusOutlined } from "@ant-design/icons";
@@ -17,6 +18,7 @@ const statusLabelMap: Record<string, string> = {
 
 export const InventoryList: React.FC = () => {
   const { tableProps, tableQuery } = useTable({ resource: "inventory" });
+  const { mutateAsync: customAction } = useCustomMutation();
 
   const dataSource = tableProps?.dataSource || [];
   const criticalCount = dataSource.filter((r: any) => r.quantity <= r.safety_threshold * 0.5).length;
@@ -32,27 +34,21 @@ export const InventoryList: React.FC = () => {
   const handleAdjust = async () => {
     const values = await adjustForm.validateFields();
     try {
-      await fetch("/api/inventory_txn", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
-        },
-        body: JSON.stringify({
+      await customAction({
+        url: "/api/inventory_txn",
+        method: "post",
+        values: {
           store_id: adjustItem.store_id,
           item_id: adjustItem.id,
           txn_type: "replenish",
           quantity: values.quantity,
           reason: values.reason || "补货",
-        }),
-      });
-      await fetch(`/api/inventory/${adjustItem.id}`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
         },
-        body: JSON.stringify({ quantity: adjustItem.quantity + values.quantity }),
+      });
+      await customAction({
+        url: `/api/inventory/${adjustItem.id}`,
+        method: "patch",
+        values: { quantity: adjustItem.quantity + values.quantity },
       });
       message.success("补货成功");
       setAdjustModalVisible(false);
@@ -66,27 +62,21 @@ export const InventoryList: React.FC = () => {
   const handleDamage = async () => {
     const values = await damageForm.validateFields();
     try {
-      await fetch("/api/inventory_txn", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
-        },
-        body: JSON.stringify({
+      await customAction({
+        url: "/api/inventory_txn",
+        method: "post",
+        values: {
           store_id: damageItem.store_id,
           item_id: damageItem.id,
           txn_type: "damage",
           quantity: values.quantity,
           reason: values.reason || "报损",
-        }),
-      });
-      await fetch(`/api/inventory/${damageItem.id}`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
         },
-        body: JSON.stringify({ quantity: Math.max(0, damageItem.quantity - values.quantity) }),
+      });
+      await customAction({
+        url: `/api/inventory/${damageItem.id}`,
+        method: "patch",
+        values: { quantity: Math.max(0, damageItem.quantity - values.quantity) },
       });
       message.success("报损记录成功");
       setDamageModalVisible(false);
@@ -166,3 +156,5 @@ export const InventoryList: React.FC = () => {
     </List>
   );
 };
+
+export { InventoryShow } from "./show";

@@ -10,6 +10,8 @@ export function useAuthHook() {
     isLoading: auth.isLoading,
     error: auth.error,
     login: auth.login,
+    wechatLogin: auth.wechatLogin,
+    bindPhone: auth.bindPhone,
     logout: auth.logout,
     sendCode: auth.sendCode,
   };

@@ -1,6 +1,8 @@
 import React, { useEffect } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, RefreshControl, Image } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { RootStackParamList } from '../navigation/AppNavigator';
 import { useAuth } from '../context/AuthContext';
 import { useActivity } from '../hooks/useActivity';
 import { useNetwork } from '../hooks/useNetwork';
@@ -16,7 +18,7 @@ export function HomeScreen() {
   const { regionId } = useAuth();
   const { currentActivity, isLoading, fetchCurrentActivity, fetchActivities, activities } = useActivity();
   const { isOffline } = useNetwork();
-  const navigation = useNavigation<any>();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const [hotEntries, setHotEntries] = React.useState<RankedEntry[]>([]);
   const [hotLoading, setHotLoading] = React.useState(false);
 
@@ -111,11 +113,11 @@ export function HomeScreen() {
 
         <View style={styles.rulesSection}>
           <Text style={styles.sectionTitle}>活动规则</Text>
-          <Text style={styles.ruleText}>参与范围：活动赛区 {currentActivity?.rules?.region_radius_km ?? 10}km 内</Text>
+          <Text style={styles.ruleText}>参与范围：活动赛区内</Text>
           <Text style={styles.ruleText}>投票限制：每人每天 {currentActivity?.rules?.max_votes_per_day ?? 3} 票</Text>
-          <Text style={styles.ruleText}>奖品：{currentActivity?.rules?.free_cake_size ?? '6寸'} {currentActivity?.rules?.cream_type ?? '动物奶油'}免费蛋糕</Text>
+          <Text style={styles.ruleText}>奖品：{currentActivity?.rules?.cake_size ?? '6寸'} {currentActivity?.rules?.cream_type ?? '动物奶油'}免费蛋糕</Text>
           <Text style={styles.ruleText}>领取：到店扫码核销自提</Text>
-          <Text style={styles.ruleText}>AI生成：每小时限 {currentActivity?.rules?.ai_generation_rate_limit ?? 5} 次</Text>
+          <Text style={styles.ruleText}>AI生成：每小时限 {currentActivity?.rules?.decoration_params?.ai_generation_rate_limit ?? 5} 次</Text>
         </View>
       </ScrollView>
     </RegionGuard>

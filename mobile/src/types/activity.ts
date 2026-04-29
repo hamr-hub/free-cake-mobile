@@ -13,17 +13,15 @@ export interface Activity {
   max_winner_count: number;
   current_entry_count: number;
   current_vote_count: number;
-  rules: ActivityRules;
+  rules: ActivityRules | null;
   banner_url: string;
 }
 
 export interface ActivityRules {
   max_votes_per_day: number;
-  ai_generation_rate_limit: number;
-  region_radius_km: number;
-  free_cake_size: string;
+  cake_size: string;
   cream_type: string;
-  allow_re_entry: boolean;
+  decoration_params?: Record<string, any>;
 }
 
 export interface ActivityListResponse {

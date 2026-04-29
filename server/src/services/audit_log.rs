@@ -3,16 +3,6 @@ use sqlx::PgPool;
 pub struct AuditLogService;
 
 impl AuditLogService {
-    #[allow(dead_code)]
-    pub async fn log(
-        _operator_id: i64,
-        _action: &str,
-        _target_type: &str,
-        _target_id: i64,
-        _detail: &str,
-    ) {
-    }
-
     pub async fn log_with_pool(
         pool: &PgPool,
         operator_id: i64,

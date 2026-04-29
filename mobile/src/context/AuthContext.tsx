@@ -1,7 +1,8 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { storage } from '../services/storage';
 import * as authService from '../services/auth';
-import { LoginResponse } from '../types/user';
+import * as api from '../services/api';
+import { LoginResponse, WechatLoginResponse, BindPhoneResponse } from '../types/user';
 
 interface AuthState {
   isAuthenticated: boolean;
@@ -14,6 +15,8 @@ interface AuthState {
 
 interface AuthContextType extends AuthState {
   login: (phone: string, verifyCode: string) => Promise<LoginResponse>;
+  wechatLogin: (code: string) => Promise<WechatLoginResponse>;
+  bindPhone: (openid: string, phone: string, verifyCode: string) => Promise<BindPhoneResponse>;
   logout: () => void;
   sendCode: (phone: string) => Promise<void>;
 }
@@ -30,9 +33,22 @@ const initialState: AuthState = {
 export const AuthContext = createContext<AuthContextType>({
   ...initialState,
   login: async () => ({}) as LoginResponse,
+  wechatLogin: async () => ({}) as WechatLoginResponse,
+  bindPhone: async () => ({}) as BindPhoneResponse,
   logout: () => {},
   sendCode: async () => {},
 });
+
+async function fetchRegionId(userId: number): Promise<number | null> {
+  try {
+    const profile = await api.getUserProfile();
+    const regionId = (profile as any)?.user?.region_id ?? null;
+    if (regionId) storage.setRegionId(regionId);
+    return regionId;
+  } catch {
+    return null;
+  }
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<AuthState>(() => ({
@@ -54,11 +70,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setState((prev) => ({ ...prev, isLoading: true, error: null }));
     try {
       const data = await authService.loginWithPhone(phone, verifyCode);
+      const regionId = data.user_id ? await fetchRegionId(data.user_id) : null;
       setState({
         isAuthenticated: true,
         token: data.token,
         userId: data.user_id,
-        regionId: data.region_id ?? null,
+        regionId,
         isLoading: false,
         error: null,
       });
@@ -68,6 +85,58 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         ...prev,
         isLoading: false,
         error: error.response?.data?.message ?? '登录失败，请重试',
+      }));
+      throw error;
+    }
+  };
+
+  const wechatLogin = async (code: string): Promise<WechatLoginResponse> => {
+    setState((prev) => ({ ...prev, isLoading: true, error: null }));
+    try {
+      const data = await authService.loginWithWechat(code);
+      if (data.token) {
+        const regionId = data.user_id ? await fetchRegionId(data.user_id) : null;
+        setState({
+          isAuthenticated: true,
+          token: data.token,
+          userId: data.user_id ?? null,
+          regionId,
+          isLoading: false,
+          error: null,
+        });
+      } else {
+        setState((prev) => ({ ...prev, isLoading: false }));
+      }
+      return data;
+    } catch (error: any) {
+      setState((prev) => ({
+        ...prev,
+        isLoading: false,
+        error: error.response?.data?.message ?? '微信登录失败',
+      }));
+      throw error;
+    }
+  };
+
+  const bindPhone = async (openid: string, phone: string, verifyCode: string): Promise<BindPhoneResponse> => {
+    setState((prev) => ({ ...prev, isLoading: true, error: null }));
+    try {
+      const data = await authService.bindPhoneAndLogin(openid, phone, verifyCode);
+      const regionId = data.user_id ? await fetchRegionId(data.user_id) : null;
+      setState({
+        isAuthenticated: true,
+        token: data.token,
+        userId: data.user_id,
+        regionId,
+        isLoading: false,
+        error: null,
+      });
+      return data;
+    } catch (error: any) {
+      setState((prev) => ({
+        ...prev,
+        isLoading: false,
+        error: error.response?.data?.message ?? '绑定失败',
       }));
       throw error;
     }
@@ -91,7 +160,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ ...state, login, logout, sendCode }}>
+    <AuthContext.Provider value={{ ...state, login, wechatLogin, bindPhone, logout, sendCode }}>
       {children}
     </AuthContext.Provider>
   );

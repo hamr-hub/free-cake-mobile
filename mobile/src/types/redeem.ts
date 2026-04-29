@@ -2,13 +2,12 @@ import { RedeemStatus } from '../utils/constants';
 
 export interface RedeemCode {
   code: string;
-  order_id: number;
   status: RedeemStatus;
-  expire_at: string;
+  order_id: number;
   store_address: string;
-  store_distance: number;
-  cake_name: string;
-  cake_image_url: string;
+  cake_size: string;
+  cream_type: string;
+  expires_at: string;
 }
 
 export interface RedeemVerifyRequest {

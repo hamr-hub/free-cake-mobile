@@ -21,7 +21,7 @@ fn test_inventory_critical_level() {
 
 #[test]
 fn test_inventory_category_filter() {
-    let categories = vec!["cream", "flour", "sugar"];
+    let categories = ["cream", "flour", "sugar"];
     assert!(categories.contains(&"cream"));
     assert!(!categories.contains(&"unknown"));
 }
